@@ -118,6 +118,12 @@ section.blk:last-of-type{border-bottom:0}
 .morelinks a:hover{border-color:var(--gold-deep); color:var(--ink); background:#fdf4dc}
 .morelinks a::after{content:" ↗"; font-size:10px; color:var(--gold-deep)}
 
+/* table of contents */
+.toc{display:flex; flex-wrap:wrap; gap:6px; padding:12px 26px 12px; background:var(--paper-deep); border-bottom:1.5px solid var(--line)}
+.toc a{font:700 11px 'Archivo'; letter-spacing:.02em; padding:5px 11px; border-radius:999px; cursor:pointer;
+  border:1.5px solid var(--line); background:var(--white); color:var(--ink-soft)}
+.toc a:hover{border-color:var(--ink); color:var(--ink); background:var(--gold)}
+
 /* compare bars */
 .cmp{margin:4px 0 10px}
 .cmp .lab{display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:3px}
@@ -454,13 +460,18 @@ async function inspect(lat, lng, geoFeature=null){
     </div>
   </div>`;
 
+  /* ----- table of contents ----- */
+  const TOC = [['place','The place'],['people','Who represents it'],['living','Living here'],['safety','Safety'],['lot','Lot & housing'],['changing','What’s changing'],['lore','Lore'],['numbers','By the numbers']];
+  html += `<nav class="toc">`+TOC.map(([id,label])=>`<a data-sec="sec-${id}">${label}</a>`).join('')+`</nav>`;
+
   /* ----- 1 · the place ----- */
   const hz = hurr?.properties.hurricane_;
   const inZone = hz && hz !== 'X' && hz !== '7';
   const cdCode = cd ? String(cd.properties.boro_cd) : null;
   const aq = cdCode ? DATA.airquality.cd[String(+cdCode)] : null;
   const hvi = zip ? DATA.hvi[zip] : null;
-  html += `<section class="blk"><h3><span class="num">1</span> The place</h3>`;
+  const hood = nta ? nta.properties.ntaname.split('-')[0].split('(')[0].trim() : (boro || 'New York City');
+  html += `<section class="blk" id="sec-place"><h3><span class="num">1</span> The place</h3>`;
   if (nta){
     const cdtaName = (nta.properties.cdtaname||'').replace(/^\w+\d+\s/,'').replace(/\s\(CD \d+ (Equivalent|Approximation)\)/,'');
     html += row('Neighborhood', `${esc(nta.properties.ntaname)}<span class="meta">Neighborhood tabulation area ${esc(nta.properties.nta2020)}</span>`, 'nta');
@@ -475,10 +486,16 @@ async function inspect(lat, lng, geoFeature=null){
       : `<span class="badge nozone">Not in an evacuation zone</span>`, inZone ? 'hurricane' : null);
   if (aq) html += row('Air quality (2023)', `PM2.5 ${aq.pm25} µg/m³ · NO₂ ${aq.no2} ppb<span class="meta">citywide ${DATA.airquality.city.pm25} and ${DATA.airquality.city.no2} · community district annual averages</span>`);
   if (hvi) html += row('Heat vulnerability', `${hvi} of 5<span class="meta">Health department index for ZIP ${esc(zip)}; 5 = most at risk in heat waves</span>`);
+  html += `<div id="trees"></div>`;
+  html += morelinks([
+    nta && [`https://popfactfinder.planning.nyc.gov/explorer?geotype=NTA2020&geoids=${esc(nta.properties.nta2020)}`, 'Full census profile'],
+    [`https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(hood + ', ' + (boro||'New York City'))}`, `${esc(hood)} on Wikipedia`],
+    ['https://www.nyc.gov/site/cau/community-boards/community-boards.page', 'Community board directory'],
+  ]);
   html += `</section>`;
 
   /* ----- 2 · representation ----- */
-  html += `<section class="blk"><h3><span class="num">2</span> Who represents this spot</h3>`;
+  html += `<section class="blk" id="sec-people"><h3><span class="num">2</span> Who represents this spot</h3>`;
   if (cc){
     const d = String(+cc.properties.coundist), m = O.council[d];
     html += row('City Council', m ? `<a href="https://council.nyc.gov/district-${d}/" target="_blank" rel="noopener">${esc(m.name)}</a>${partyTag(m.party)}<span class="meta">District ${d}${m.role?' · '+esc(m.role):''}</span>` : `District ${d}`, 'council');
@@ -503,38 +520,46 @@ async function inspect(lat, lng, geoFeature=null){
   html += row('Public advocate', `${esc(O.citywide.public_advocate.name)}${partyTag(O.citywide.public_advocate.party)}`);
   html += row('Comptroller', `${esc(O.citywide.comptroller.name)}${partyTag(O.citywide.comptroller.party)}`);
   html += row('United States Senate', O.citywide.us_senators.map(s=>esc(s.name)).join('<br>'));
+  const ad = asm ? String(+asm.properties.assembly_district) : null;
+  html += morelinks([
+    ['https://findmypollsite.vote.nyc/', 'Find your poll site'],
+    ['https://vote.nyc/', 'Register to vote'],
+    ['https://joshgreenman1973.github.io/nyc-election-archive/', 'How this area voted (mayoral primaries)'],
+    ad && [`https://nyassembly.gov/mem/?ad=${ad.padStart(3,'0')}`, 'Assembly member page'],
+  ]);
   html += `<div class="note">Officeholders as of June 2026, from the City Council, the unitedstates legislators project and Open States.</div></section>`;
 
-  /* ----- 3 · schools ----- */
-  html += `<section class="blk"><h3><span class="num">3</span> Schools</h3>`;
+  /* ----- 3 · living here ----- */
+  html += `<section class="blk" id="sec-living"><h3><span class="num">3</span> Living here</h3>`;
   if (sd) html += row('School district', `District ${+sd.properties.schooldist}`, 'schooldist');
   if (es?.properties.label) html += row('Zoned elementary', schoolLinks(es.properties), 'eszones');
   else html += row('Zoned elementary', `<span class="meta" style="display:inline">No zoned school — choice or unzoned area</span>`);
   if (ms?.properties.label) html += row('Zoned middle school', schoolLinks(ms.properties), 'mszones');
   html += `<div class="subhead">Nearest public schools</div>${nearestSchools(lat,lng)}
-  <div class="note">Zones are 2024-2025; locations are the Department of Education's latest published point file (2019-20) with 2021-22 enrollment — confirm with MySchools before enrolling. School links go to the DOE page; "profile" links go to InsideSchools.</div></section>`;
-
-  /* ----- 4 · city services ----- */
-  html += `<section class="blk"><h3><span class="num">4</span> City services</h3>`;
-  if (pp){
-    const n = +pp.properties.precinct;
-    html += row('Police precinct', `<a href="${precinctUrl(n)}" target="_blank" rel="noopener">${n===22?'Central Park Precinct':ordinal(n)+' Precinct'}</a>`, 'precinct');
-  }
+  <div class="note" style="margin-bottom:4px">Zones are 2024-2025; locations are the Department of Education's latest published point file (2019-20) with 2021-22 enrollment — confirm with MySchools before enrolling. School links go to the DOE page; "profile" links go to InsideSchools.</div>`;
+  html += `<div class="subhead">Getting around</div>` + subwayHtml(lat,lng) + `<div id="bike"></div>`;
   if (dsny) html += row('Sanitation district', `${esc(dsny.properties.district)}<span class="meta">Department of Sanitation collection district</span>`, 'dsny');
-  html += subwayHtml(lat,lng);
+  html += `<div id="c311" style="margin-top:10px"><span class="spin"></span> 311 complaints…</div>
+    <div id="food" style="margin-top:12px"><span class="spin"></span> Restaurant grades…</div>
+    <div id="rats" style="margin-top:12px"></div>`;
+  html += morelinks([
+    ['https://www.myschools.nyc/', 'Apply to schools (MySchools)'],
+    ['https://new.mta.info/', 'MTA service status'],
+    ['https://portal.311.nyc.gov/', 'Report something to 311'],
+  ]);
   html += `</section>`;
 
-  /* ----- 5 · the lot (lazy) ----- */
-  html += lazySection(5, 'This lot', 'lot');
-  /* ----- 6 · around here (lazy) ----- */
-  html += lazySection(6, 'Around here', 'around');
-  /* ----- 7 · new and changing (lazy) ----- */
-  html += lazySection(7, 'New and changing', 'changing');
-  /* ----- 8 · landmarks and lore (lazy) ----- */
-  html += lazySection(8, 'Landmarks and lore', 'lore');
-  /* ----- 9 · neighborhood numbers ----- */
+  /* ----- 4 · safety (lazy) ----- */
+  html += lazySection(4, 'Safety', 'safety', 'sec-safety');
+  /* ----- 5 · lot and housing (lazy) ----- */
+  html += lazySection(5, 'This lot and housing', 'lot', 'sec-lot');
+  /* ----- 6 · new and changing (lazy) ----- */
+  html += lazySection(6, 'What’s changing', 'changing', 'sec-changing');
+  /* ----- 7 · landmarks and lore (lazy) ----- */
+  html += lazySection(7, 'Landmarks and lore', 'lore', 'sec-lore');
+  /* ----- 8 · neighborhood numbers ----- */
   html += demographicsBlock(nta, boro);
-  /* ----- 10 · read more ----- */
+  /* ----- 9 · read more ----- */
   html += readMoreBlock(nta, boro, bbl, zip);
 
   html += `<div class="pfoot">Boundaries and demographics: New York City Department of City Planning and the United States Census Bureau (American Community Survey 2016-2020). Live feeds: NYC Open Data. Lookups are point-in-polygon against simplified boundaries — addresses sitting exactly on a district line can resolve to the neighbor. <a href="methodology.html">How this all works →</a></div>`;
@@ -556,11 +581,17 @@ async function inspect(lat, lng, geoFeature=null){
     navigator.clipboard.writeText(location.href).then(()=>{ e.target.textContent='Copied ✓'; setTimeout(()=>e.target.textContent='Copy link',1500); });
   });
 
+  // TOC jump links
+  document.querySelectorAll('#panelbody .toc a').forEach(a =>
+    a.addEventListener('click', () => document.getElementById(a.dataset.sec)?.scrollIntoView({behavior:'smooth', block:'start'})));
+
   fetchElevation(lat,lng);
-  // lazy loaders fire as sections scroll into view
   const ctx = {lat,lng,bbl,revDist,revFailed,nta,zip,precinct: pp ? +pp.properties.precinct : null,token:Symbol()};
   activeCtx = ctx;
-  const loaders = {lot: () => fetchLot(ctx), around: () => fetchAround(ctx), changing: () => fetchChanging(ctx), lore: () => fetchLore(ctx)};
+  fetchLiving(ctx);   // chapter 3's live tiles fire right away
+  fetchTrees(ctx);
+  // remaining live chapters load as they scroll into view
+  const loaders = {safety: () => fetchSafety(ctx), lot: () => fetchLot(ctx), changing: () => fetchChanging(ctx), lore: () => fetchLore(ctx)};
   const scroller = $('panelbody');
   function checkLazy(){
     if (stale(ctx)) return;
@@ -582,9 +613,13 @@ async function inspect(lat, lng, geoFeature=null){
 }
 let activeCtx = null;
 const stale = ctx => ctx !== activeCtx;
-function lazySection(num, title, key){
-  return `<section class="blk" data-lazy="${key}"><h3><span class="num">${num}</span> ${title}</h3>
+function lazySection(num, title, key, secId){
+  return `<section class="blk" data-lazy="${key}"${secId?` id="${secId}"`:''}><h3><span class="num">${num}</span> ${title}</h3>
     <div id="body-${key}"><span class="spin"></span> Loading…</div></section>`;
+}
+function morelinks(items){
+  const links = items.filter(Boolean).map(([u,label])=>`<a href="${u}" target="_blank" rel="noopener">${label}</a>`).join('');
+  return links ? `<div class="morelinks">${links}</div>` : '';
 }
 
 /* ---------- elevation ---------- */
@@ -650,18 +685,41 @@ async function fetchLot(ctx){
     if (d.assesstot) h += row('Assessed value', money(d.assesstot));
     if (d.ownername) h += row('Owner of record', esc(d.ownername));
     if (d.landmark) h += row('Landmark', esc(d.landmark));
-    h += `<div id="hpd"></div>`;
+    h += `<div id="hpd"></div><div id="housing" style="margin-top:6px"></div>`;
     const b = String(parseInt(bbl,10)), boroId = b[0], block = parseInt(b.slice(1,6),10), lot = parseInt(b.slice(6),10);
-    h += `<div class="morelinks">
-      <a href="https://zola.planning.nyc.gov/l/lot/${boroId}/${block}/${lot}" target="_blank" rel="noopener">Full zoning on ZoLa</a>
-      <a href="http://a836-acris.nyc.gov/bblsearch/bblsearch.asp?borough=${boroId}&block=${block}&lot=${lot}" target="_blank" rel="noopener">Deeds and mortgages (ACRIS)</a>
-      <a href="https://joshgreenman1973.github.io/nyc-three-eras/" target="_blank" rel="noopener">This address in 1940 and the 1980s</a>
-      <a href="https://80s.nyc/" target="_blank" rel="noopener">1980s street view (80s.nyc)</a>
-    </div>
-    <div class="note">From the Department of City Planning's Primary Land Use Tax Lot Output (PLUTO) file, queried live.</div>`;
+    h += morelinks([
+      [`https://zola.planning.nyc.gov/l/lot/${boroId}/${block}/${lot}`, 'Full zoning on ZoLa'],
+      [`http://a836-acris.nyc.gov/bblsearch/bblsearch.asp?borough=${boroId}&block=${block}&lot=${lot}`, 'Deeds and mortgages (ACRIS)'],
+    ]);
+    h += `<div class="note">From the Department of City Planning's Primary Land Use Tax Lot Output (PLUTO) file, queried live.</div>`;
     el.innerHTML = h;
     fetchHpd(ctx, boroId, block, lot, +rows[0].unitsres);
+    fetchHousing(ctx);
   }catch(e){ if (!stale(ctx)) el.innerHTML = `<span class="errnote">Could not reach the live property feed.</span>`; }
+}
+async function fetchHousing(ctx){
+  const {lat,lng} = ctx;
+  const dy = 0.0045, dx = 0.0059; // ~500 m box
+  const [ev, ah] = await Promise.all([
+    soda('6z8x-wfk4', {'$select':'residential_commercial_ind,count(*) as n',
+      '$where':`latitude::number between ${lat-dy} and ${lat+dy} AND longitude::number between ${lng-dx} and ${lng+dx} AND executed_date > '${daysAgoISO(365)}'`,
+      '$group':'residential_commercial_ind'}).catch(()=>null),
+    soda('hg8x-zxpr', {'$select':'project_name,sum(all_counted_units) as units,max(project_start_date) as started',
+      '$where':`latitude::number between ${lat-dy} and ${lat+dy} AND longitude::number between ${lng-dx} and ${lng+dx} AND project_start_date > '${daysAgoISO(365*5)}'`,
+      '$group':'project_name','$order':'units DESC','$limit':4}).catch(()=>null),
+  ]);
+  if (stale(ctx) || !$('housing')) return;
+  let h = '';
+  if (ev){
+    const res = ev.find(x=>x.residential_commercial_ind==='Residential');
+    const tot = ev.reduce((s,x)=>s+ +x.n,0);
+    h += row('Marshal evictions within ~500 meters, last 12 months', `${fmt(tot)}<span class="meta">${fmt(res? +res.n:0)} residential</span>`);
+  }
+  if (ah && ah.length){
+    const units = ah.reduce((s,x)=>s+ +(+x.units||0),0);
+    h += row('City-financed affordable housing nearby, last 5 years', `${fmt(units)} units<span class="meta">largest: ${esc(titleWords(ah[0].project_name||''))}</span>`);
+  }
+  $('housing').innerHTML = h;
 }
 async function fetchHpd(ctx, boroId, block, lot, unitsres){
   if (!unitsres) return;
@@ -675,15 +733,9 @@ async function fetchHpd(ctx, boroId, block, lot, unitsres){
   }catch(e){}
 }
 
-/* ---------- 6 · around here ---------- */
-async function fetchAround(ctx){
-  const el = $('body-around'); if (!el) return;
+/* ---------- 3 · living here (live tiles) ---------- */
+async function fetchLiving(ctx){
   const {lat,lng} = ctx;
-  el.innerHTML = `<div id="c311"><span class="spin"></span> 311 complaints…</div>
-    <div id="crime" style="margin-top:12px"><span class="spin"></span> Crime reports…</div>
-    <div id="crash" style="margin-top:12px"><span class="spin"></span> Traffic crashes…</div>
-    <div id="trees" style="margin-top:12px"><span class="spin"></span> Street trees…</div>
-    <div id="food" style="margin-top:12px"><span class="spin"></span> Restaurant grades…</div>`;
   // 311 — render the local list immediately, patch in the citywide comparison when it resolves
   const since311 = daysAgoISO(90);
   soda('erm2-nwe9',{'$select':'complaint_type,count(*) as n',
@@ -703,34 +755,6 @@ async function fetchAround(ctx){
       $('c311cmp').innerHTML = `${(total/expected).toFixed(1)}× the citywide average for an area this size (about ${fmt(Math.round(expected))}).`;
     });
   }).catch(()=>{ if(!stale(ctx)&&$('c311')) $('c311').innerHTML='<span class="errnote">311 feed unavailable right now.</span>'; });
-  // crime — with context: citywide expectation, last year, felony mix, precinct rank, 13 month trend
-  fetchCrime(ctx).catch(()=>{ if(!stale(ctx)&&$('crime')) $('crime').innerHTML='<span class="errnote">Crime feed unavailable right now.</span>'; });
-  // crashes
-  soda('h9gi-nx95',{'$select':'count(*) as n, sum(number_of_persons_injured) as inj, sum(number_of_persons_killed) as killed',
-    '$where':`within_circle(location, ${lat}, ${lng}, 250) AND crash_date > '${daysAgoISO(365)}'`})
-  .then(rows => {
-    if (stale(ctx)||!$('crash')) return;
-    const d = rows[0]||{};
-    $('crash').innerHTML = `<div class="row"><span class="k">Traffic crashes, last 12 months within 250 meters</span><span class="v"></span></div>
-      <div class="statpair">
-        <div class="g"><b>${fmt(d.n)}</b><span>reported crashes</span></div>
-        <div class="g"><b>${fmt(d.inj)}</b><span>people injured</span></div>
-        <div class="g" style="${+d.killed?'border-color:#b3382c':''}"><b style="${+d.killed?'color:#b3382c':''}">${fmt(d.killed)}</b><span>killed</span></div>
-      </div>`;
-  }).catch(()=>{ if(!stale(ctx)&&$('crash')) $('crash').innerHTML='<span class="errnote">Crash feed unavailable right now.</span>'; });
-  // trees
-  soda('hn5i-inap',{'$select':'genusspecies,count(*) as n',
-    '$where':`within_circle(location, ${lat}, ${lng}, 200)`,'$group':'genusspecies','$order':'n DESC','$limit':30})
-  .then(rows => {
-    if (stale(ctx)||!$('trees')) return;
-    const total = rows.reduce((s,x)=>s+ +x.n,0);
-    if (!total){ $('trees').innerHTML = row('Street trees within 200 meters','0'); return; }
-    const top = rows.slice(0,3).map(x=>{
-      const common = (x.genusspecies||'').split(' - ')[1] || x.genusspecies;
-      return `${esc(common)} (${fmt(x.n)})`;
-    }).join(', ');
-    $('trees').innerHTML = row('Street trees within 200 meters', `${fmt(total)}<span class="meta">mostly ${top}</span>`);
-  }).catch(()=>{ if(!stale(ctx)&&$('trees')) $('trees').innerHTML='<span class="errnote">Tree feed unavailable right now.</span>'; });
   // restaurants
   soda('43nn-pn8j',{'$select':'camis,dba,grade,max(inspection_date) as d',
     '$where':`within_circle(location, ${lat}, ${lng}, 200) AND grade IS NOT NULL AND inspection_date > '${daysAgoISO(730)}'`,
@@ -751,7 +775,104 @@ async function fetchAround(ctx){
       </div>
       <div class="note">Latest posted grade per restaurant, inspections from the last two years.</div>`;
   }).catch(()=>{ if(!stale(ctx)&&$('food')) $('food').innerHTML='<span class="errnote">Inspection feed unavailable right now.</span>'; });
+  // rodent inspections
+  soda('p937-wjvj',{'$select':'result,count(*) as n',
+    '$where':`within_circle(location, ${lat}, ${lng}, 200) AND inspection_date > '${daysAgoISO(365)}'`,
+    '$group':'result'})
+  .then(rows => {
+    if (stale(ctx)||!$('rats')) return;
+    const total = rows.reduce((s,x)=>s+ +x.n,0);
+    if (!total){ $('rats').innerHTML = ''; return; }
+    const active = rows.filter(x=>/rat activity|failed/i.test(x.result||'')).reduce((s,x)=>s+ +x.n,0);
+    $('rats').innerHTML = row('Rat inspections within 200 meters, last 12 months',
+      `${fmt(total)}<span class="meta">${fmt(active)} found rat activity (health department inspections)</span>`);
+  }).catch(()=>{ if(!stale(ctx)&&$('rats')) $('rats').innerHTML=''; });
+  // Citi Bike (live availability)
+  citibikeData().then(stations => {
+    if (stale(ctx)||!$('bike')||!stations) return;
+    const near = stations.map(s => ({...s, d: haversine(lat,lng,s.lat,s.lng)})).sort((a,b)=>a.d-b.d).slice(0,2).filter(s=>s.d<800);
+    if (!near.length){ $('bike').innerHTML = ''; return; }
+    $('bike').innerHTML = `<ul class="toplist">`+near.map(s=>`<li class="poi" data-lat="${s.lat}" data-lng="${s.lng}" data-name="${esc(s.name)}">
+      <span>Citi Bike: ${esc(s.name)}<span class="sub">${s.bikes} bikes (${s.ebikes} electric) · ${s.docks} docks open right now</span></span>
+      <span class="n">${walkmin(s.d)} min</span></li>`).join('')+`</ul>`;
+    $('bike').querySelectorAll('.poi').forEach(li => {
+      li.addEventListener('mouseenter', () => showPoi(+li.dataset.lat, +li.dataset.lng, li.dataset.name));
+      li.addEventListener('mouseleave', clearPoi);
+    });
+  });
 }
+
+/* Citi Bike GBFS, fetched once per session */
+let _citibike = null;
+function citibikeData(){
+  if (!_citibike) _citibike = Promise.all([
+    fetch('https://gbfs.citibikenyc.com/gbfs/en/station_information.json').then(r=>r.json()),
+    fetch('https://gbfs.citibikenyc.com/gbfs/en/station_status.json').then(r=>r.json()),
+  ]).then(([info, status]) => {
+    const st = {};
+    status.data.stations.forEach(s => st[s.station_id] = s);
+    return info.data.stations.map(s => {
+      const x = st[s.station_id] || {};
+      return {name:s.name, lat:s.lat, lng:s.lon, bikes:x.num_bikes_available??'—', ebikes:x.num_ebikes_available??0, docks:x.num_docks_available??'—'};
+    });
+  }).catch(()=>null);
+  return _citibike;
+}
+
+/* ---------- 1 · street trees (place chapter) ---------- */
+function fetchTrees(ctx){
+  const {lat,lng} = ctx;
+  soda('hn5i-inap',{'$select':'genusspecies,count(*) as n',
+    '$where':`within_circle(location, ${lat}, ${lng}, 200)`,'$group':'genusspecies','$order':'n DESC','$limit':30})
+  .then(rows => {
+    if (stale(ctx)||!$('trees')) return;
+    const total = rows.reduce((s,x)=>s+ +x.n,0);
+    if (!total){ $('trees').innerHTML = ''; return; }
+    const top = rows.slice(0,3).map(x=>{
+      const common = (x.genusspecies||'').split(' - ')[1] || x.genusspecies;
+      return `${esc(common)} (${fmt(x.n)})`;
+    }).join(', ');
+    $('trees').innerHTML = row('Street trees within 200 meters', `${fmt(total)}<span class="meta">mostly ${top}</span>`);
+  }).catch(()=>{ if(!stale(ctx)&&$('trees')) $('trees').innerHTML=''; });
+}
+
+/* ---------- 4 · safety ---------- */
+async function fetchSafety(ctx){
+  const el = $('body-safety'); if (!el) return;
+  const {lat,lng} = ctx;
+  const n0 = ctx.precinct;
+  el.innerHTML = (n0 ? `<div class="row hl" id="pctrow"><span class="k">Police precinct</span><span class="v"><a href="${precinctUrl(n0)}" target="_blank" rel="noopener">${n0===22?'Central Park Precinct':ordinal(n0)+' Precinct'}</a></span></div>` : '')
+    + `<div id="crime" style="margin-top:6px"><span class="spin"></span> Crime data…</div>
+    <div id="crash" style="margin-top:12px"><span class="spin"></span> Traffic crashes…</div>
+    <div id="safetylinks"></div>`;
+  if (n0) {
+    const pctFeat = lookup(LAYERS.precinct, lat, lng);
+    const pr = $('pctrow');
+    pr.addEventListener('mouseenter', () => showShape(pctFeat));
+    pr.addEventListener('mouseleave', clearShape);
+  }
+  fetchCrime(ctx).catch(()=>{ if(!stale(ctx)&&$('crime')) $('crime').innerHTML='<span class="errnote">Crime feed unavailable right now.</span>'; });
+  soda('h9gi-nx95',{'$select':'count(*) as n, sum(number_of_persons_injured) as inj, sum(number_of_persons_killed) as killed',
+    '$where':`within_circle(location, ${lat}, ${lng}, 250) AND crash_date > '${daysAgoISO(365)}'`})
+  .then(rows => {
+    if (stale(ctx)||!$('crash')) return;
+    const d = rows[0]||{};
+    $('crash').innerHTML = `<div class="row"><span class="k">Traffic crashes, last 12 months within 250 meters</span><span class="v"></span></div>
+      <div class="statpair">
+        <div class="g"><b>${fmt(d.n)}</b><span>reported crashes</span></div>
+        <div class="g"><b>${fmt(d.inj)}</b><span>people injured</span></div>
+        <div class="g" style="${+d.killed?'border-color:#b3382c':''}"><b style="${+d.killed?'color:#b3382c':''}">${fmt(d.killed)}</b><span>killed</span></div>
+      </div>`;
+  }).catch(()=>{ if(!stale(ctx)&&$('crash')) $('crash').innerHTML='<span class="errnote">Crash feed unavailable right now.</span>'; });
+  const n = ctx.precinct;
+  $('safetylinks').innerHTML = morelinks([
+    n && [precinctUrl(n), (n===22?'Central Park Precinct':ordinal(n)+' Precinct') + ' page'],
+    ['https://compstat.nypdonline.org/', 'Official CompStat portal'],
+    ['https://compstat-ledger.vercel.app/', 'Three decades of CompStat, charted'],
+    ['https://vzv.nyc/', 'Vision Zero crash map'],
+  ]);
+}
+
 /* 311 citywide baseline, fetched once per session */
 let _city311 = null;
 function city311Total(since){
@@ -790,7 +911,7 @@ function compstatBlock(cs, pctNum){
       if (!c) return '';
       return `<li><span>${label}</span><span class="n">${fmt(c.current_year)} <span style="font-weight:400;${pctColor(c.pct_change)}">${signedPct(c.pct_change)}</span></span></li>`;
     }).join('')+`</ul>
-    <div class="note" style="margin-top:6px">Precinct-wide weekly CompStat figures (major felonies only), fresher than the complaint feed below. Year-to-date counts with change vs. the same dates last year. <a href="https://compstat-ledger.vercel.app/" target="_blank" rel="noopener">Three decades of CompStat, charted →</a></div>
+    <div class="note" style="margin-top:6px">Precinct-wide weekly CompStat figures (major felonies only), fresher than the complaint feed below. Year-to-date counts with change vs. the same dates last year.</div>
     <div class="subhead" style="margin-top:14px">All complaints, right around this point</div>`;
   return h;
 }
@@ -997,8 +1118,14 @@ async function fetchLore(ctx){
       <span>${l.url?`<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)}</a>`:esc(l.name)}<span class="sub">designated ${esc(l.year)||'—'}</span></span>
       <span class="n">${walkmin(l.d)} min</span></li>`).join('')+`</ul>`;
   } else h += `<div class="note" style="margin:0 0 6px">No designated individual landmark within about a 30 minute walk.</div>`;
-  h += `<div class="subhead">Nearby on Wikipedia</div><div id="wiki"><span class="spin"></span></div>
-  <div class="note">Landmark links open the Landmarks Preservation Commission designation report. Wikipedia results are whatever articles are geotagged closest to this point.</div>`;
+  h += `<div class="subhead">Nearby on Wikipedia</div><div id="wiki"><span class="spin"></span></div>`;
+  h += morelinks([
+    ['https://joshgreenman1973.github.io/nyc-three-eras/', 'This address in 1940 and the 1980s'],
+    ['https://80s.nyc/', '1980s street view (80s.nyc)'],
+    ['https://www.oldnyc.org/', 'Old photos by location (OldNYC)'],
+    [`https://digitalcollections.nypl.org/search/index?keywords=${encodeURIComponent((ctx.nta?ctx.nta.properties.ntaname.split('-')[0]:'New York City'))}`, 'NYPL digital collections'],
+  ]);
+  h += `<div class="note">Landmark links open the Landmarks Preservation Commission designation report. Wikipedia results are whatever articles are geotagged closest to this point.</div>`;
   el.innerHTML = h;
   el.querySelectorAll('.poi').forEach(li => {
     li.addEventListener('mouseenter', () => showPoi(+li.dataset.lat, +li.dataset.lng, li.dataset.name));
@@ -1027,7 +1154,7 @@ function demographicsBlock(nta, boro){
   const CITY = DATA.compare_geos.NYC;
   const BORO = DATA.compare_geos[boro];
   const isPark = nta.properties.ntatype && nta.properties.ntatype !== '0';
-  let h = `<section class="blk"><h3><span class="num">9</span> ${esc(nta.properties.ntaname)} in numbers</h3>`;
+  let h = `<section class="blk" id="sec-numbers"><h3><span class="num">8</span> ${esc(nta.properties.ntaname)} in numbers</h3>`;
   if (!D || !D.pop || (isPark && D.pop < 200)){
     h += `<div class="note" style="margin:0">This area (a park, airport, cemetery or other special zone) has no meaningful residential profile.</div></section>`;
     return h;
@@ -1077,15 +1204,12 @@ function cmpScaled(label, v, cityv, scale, fmtfn, borov){
 function readMoreBlock(nta, boro, bbl, zip){
   const hood = nta ? nta.properties.ntaname.split('-')[0].split('(')[0].trim() : (boro || 'New York City');
   const q = encodeURIComponent(`"${hood}" ${boro||'New York City'}`);
-  const wq = encodeURIComponent(hood + ', ' + (boro==='Manhattan'?'Manhattan':boro||'New York City'));
-  return `<section class="blk"><h3><span class="num">10</span> Go deeper</h3>
+  return `<section class="blk"><h3><span class="num">9</span> What people are saying</h3>
     <div class="morelinks" style="margin-top:2px">
       <a href="https://news.google.com/search?q=${q}" target="_blank" rel="noopener">${esc(hood)} in the news</a>
       <a href="https://www.reddit.com/search/?q=${q}" target="_blank" rel="noopener">Reddit conversations</a>
-      <a href="https://en.wikipedia.org/wiki/Special:Search?search=${wq}" target="_blank" rel="noopener">Wikipedia</a>
       <a href="https://www.thecity.nyc/search/?q=${encodeURIComponent(hood)}" target="_blank" rel="noopener">The City coverage</a>
       <a href="https://gothamist.com/search?q=${encodeURIComponent(hood)}" target="_blank" rel="noopener">Gothamist coverage</a>
-      <a href="https://popfactfinder.planning.nyc.gov/" target="_blank" rel="noopener">Full census profile (Population FactFinder)</a>
     </div>
     <div class="note">Searches open prefilled on the outside site using the neighborhood name — skim with judgment.</div></section>`;
 }
