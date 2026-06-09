@@ -558,7 +558,7 @@ async function inspect(lat, lng, geoFeature=null){
 
   fetchElevation(lat,lng);
   // lazy loaders fire as sections scroll into view
-  const ctx = {lat,lng,bbl,revDist,revFailed,nta,zip,token:Symbol()};
+  const ctx = {lat,lng,bbl,revDist,revFailed,nta,zip,precinct: pp ? +pp.properties.precinct : null,token:Symbol()};
   activeCtx = ctx;
   const loaders = {lot: () => fetchLot(ctx), around: () => fetchAround(ctx), changing: () => fetchChanging(ctx), lore: () => fetchLore(ctx)};
   const scroller = $('panelbody');
@@ -684,30 +684,27 @@ async function fetchAround(ctx){
     <div id="crash" style="margin-top:12px"><span class="spin"></span> Traffic crashes…</div>
     <div id="trees" style="margin-top:12px"><span class="spin"></span> Street trees…</div>
     <div id="food" style="margin-top:12px"><span class="spin"></span> Restaurant grades…</div>`;
-  // 311
+  // 311 — render the local list immediately, patch in the citywide comparison when it resolves
+  const since311 = daysAgoISO(90);
   soda('erm2-nwe9',{'$select':'complaint_type,count(*) as n',
-    '$where':`within_circle(location, ${lat}, ${lng}, 250) AND created_date > '${daysAgoISO(90)}'`,
+    '$where':`within_circle(location, ${lat}, ${lng}, 250) AND created_date > '${since311}'`,
     '$group':'complaint_type','$order':'n DESC','$limit':50})
   .then(rows => {
     if (stale(ctx)||!$('c311')) return;
     const total = rows.reduce((s,x)=>s+ +x.n,0);
-    let h = `<div class="row"><span class="k">311 complaints, last 90 days within 250 meters</span><span class="v bignum">${fmt(total)}</span></div>`;
+    let h = `<div class="row"><span class="k">311 complaints, last 90 days within 250 meters</span><span class="v bignum">${fmt(total)}</span></div>
+      <div class="note" style="margin:0 0 6px" id="c311cmp"><span class="spin"></span> comparing to the citywide average…</div>`;
     if (rows.length) h += `<ul class="toplist">`+rows.slice(0,5).map(x=>`<li><span>${esc(x.complaint_type)}</span><span class="n">${fmt(x.n)}</span></li>`).join('')+`</ul>`;
     $('c311').innerHTML = h;
+    city311Total(since311).then(cityTotal => {
+      if (stale(ctx)||!$('c311cmp')) return;
+      if (!cityTotal){ $('c311cmp').remove(); return; }
+      const expected = cityTotal * circleSqMi(250) / CITY_LAND_SQMI;
+      $('c311cmp').innerHTML = `${(total/expected).toFixed(1)}× the citywide average for an area this size (about ${fmt(Math.round(expected))}).`;
+    });
   }).catch(()=>{ if(!stale(ctx)&&$('c311')) $('c311').innerHTML='<span class="errnote">311 feed unavailable right now.</span>'; });
-  // crime
-  const yr = new Date().getFullYear();
-  soda('5uac-w243',{'$select':'ofns_desc,count(*) as n',
-    '$where':`within_circle(lat_lon, ${lat}, ${lng}, 500) AND rpt_dt >= '${yr}-01-01T00:00:00'`,
-    '$group':'ofns_desc','$order':'n DESC','$limit':50})
-  .then(rows => {
-    if (stale(ctx)||!$('crime')) return;
-    const total = rows.reduce((s,x)=>s+ +x.n,0);
-    let h = `<div class="row"><span class="k">Crime complaints reported to the New York Police Department in ${yr}, within 500 meters</span><span class="v bignum">${fmt(total)}</span></div>`;
-    if (rows.length) h += `<ul class="toplist">`+rows.slice(0,5).map(x=>`<li><span>${titleCaseOfns(x.ofns_desc)}</span><span class="n">${fmt(x.n)}</span></li>`).join('')+`</ul>`;
-    h += `<div class="note">Counted by report date. Raw complaint counts reflect density, foot traffic and reporting behavior as much as conditions — context, not a safety score. Locations of sex crimes and some other offenses are withheld by the department.</div>`;
-    $('crime').innerHTML = h;
-  }).catch(()=>{ if(!stale(ctx)&&$('crime')) $('crime').innerHTML='<span class="errnote">Crime feed unavailable right now.</span>'; });
+  // crime — with context: citywide expectation, last year, felony mix, precinct rank, 13 month trend
+  fetchCrime(ctx).catch(()=>{ if(!stale(ctx)&&$('crime')) $('crime').innerHTML='<span class="errnote">Crime feed unavailable right now.</span>'; });
   // crashes
   soda('h9gi-nx95',{'$select':'count(*) as n, sum(number_of_persons_injured) as inj, sum(number_of_persons_killed) as killed',
     '$where':`within_circle(location, ${lat}, ${lng}, 250) AND crash_date > '${daysAgoISO(365)}'`})
@@ -754,6 +751,119 @@ async function fetchAround(ctx){
       </div>
       <div class="note">Latest posted grade per restaurant, inspections from the last two years.</div>`;
   }).catch(()=>{ if(!stale(ctx)&&$('food')) $('food').innerHTML='<span class="errnote">Inspection feed unavailable right now.</span>'; });
+}
+/* 311 citywide baseline, fetched once per session */
+let _city311 = null;
+function city311Total(since){
+  if (!_city311) _city311 = soda('erm2-nwe9',{'$select':'count(*) as n','$where':`created_date > '${since}'`})
+    .then(r=>+r[0].n).catch(()=>null);
+  return _city311;
+}
+
+/* crime context: shared citywide baselines, fetched once per session */
+const CITY_LAND_SQMI = 302.1;
+const crimeCache = {};
+function circleSqMi(radiusM){ return Math.PI * radiusM * radiusM / 2589988; }
+function featureSqMi(f){
+  // equirectangular shoelace, good to well under 1% at NYC's latitude
+  const R = 3958.8, t = Math.PI/180;
+  let area = 0;
+  const rings = g => g.type==='Polygon' ? [g.coordinates] : g.coordinates;
+  rings(f.geometry).forEach(poly => poly.forEach((ring,ri) => {
+    let s = 0;
+    for (let i=0, j=ring.length-1; i<ring.length; j=i++){
+      const x1=ring[j][0]*t*R*Math.cos(ring[j][1]*t), y1=ring[j][1]*t*R;
+      const x2=ring[i][0]*t*R*Math.cos(ring[i][1]*t), y2=ring[i][1]*t*R;
+      s += (x1*y2 - x2*y1);
+    }
+    area += (ri===0 ? 1 : -1) * Math.abs(s/2);
+  }));
+  return area;
+}
+async function crimeBaselines(){
+  if (crimeCache.ready) return crimeCache;
+  // the "year to date" file is updated quarterly — find its real window first
+  const meta = await soda('5uac-w243', {'$select':'max(rpt_dt) as latest, min(rpt_dt) as earliest, count(*) as total'});
+  crimeCache.end = meta[0].latest.slice(0,10);
+  crimeCache.start = meta[0].earliest.slice(0,10);
+  crimeCache.cityTotal = +meta[0].total;
+  const [byPct] = await Promise.all([
+    soda('5uac-w243', {'$select':'addr_pct_cd,count(*) as n','$group':'addr_pct_cd'})
+  ]);
+  // complaints per square mile by precinct, ranked (1 = densest)
+  const areas = {};
+  LAYERS.precinct.features.forEach(f => {
+    const p = +f.properties.precinct;
+    areas[p] = (areas[p]||0) + featureSqMi(f);
+  });
+  crimeCache.pctRates = byPct
+    .filter(r => areas[+r.addr_pct_cd])
+    .map(r => ({pct:+r.addr_pct_cd, rate: +r.n/areas[+r.addr_pct_cd]}))
+    .sort((a,b)=>b.rate-a.rate);
+  crimeCache.ready = true;
+  return crimeCache;
+}
+function fmtWindow(startISO, endISO){
+  const o = {month:'long', day:'numeric'};
+  const s = new Date(startISO+'T12:00:00'), e = new Date(endISO+'T12:00:00');
+  return `${s.toLocaleDateString('en-US',o)} to ${e.toLocaleDateString('en-US',o)}, ${e.getFullYear()}`;
+}
+async function fetchCrime(ctx){
+  const {lat,lng} = ctx;
+  const base = await crimeBaselines();
+  if (stale(ctx)||!$('crime')) return;
+  const RADIUS = 500;
+  const wNow = `within_circle(lat_lon, ${lat}, ${lng}, ${RADIUS})`;
+  const lastStart = (+base.start.slice(0,4)-1) + base.start.slice(4);
+  const lastEnd = (+base.end.slice(0,4)-1) + base.end.slice(4);
+  const sparkStart = new Date(new Date(base.end) - 380*86400000).toISOString().slice(0,10);
+  const [rows, lastYear, sparkOld, sparkNew] = await Promise.all([
+    soda('5uac-w243', {'$select':'ofns_desc,law_cat_cd,count(*) as n','$where':wNow,'$group':'ofns_desc,law_cat_cd','$order':'n DESC','$limit':80}),
+    soda('qgea-i56i', {'$select':'count(*) as n','$where':`${wNow} AND rpt_dt between '${lastStart}T00:00:00' and '${lastEnd}T23:59:59'`}),
+    soda('qgea-i56i', {'$select':'date_trunc_ym(rpt_dt) as m,count(*) as n','$where':`${wNow} AND rpt_dt >= '${sparkStart}T00:00:00'`,'$group':'m'}),
+    soda('5uac-w243', {'$select':'date_trunc_ym(rpt_dt) as m,count(*) as n','$where':wNow,'$group':'m'}),
+  ]);
+  if (stale(ctx)||!$('crime')) return;
+  const total = rows.reduce((s,x)=>s+ +x.n,0);
+  const prev = +(lastYear[0]?.n || 0);
+  const fel = rows.filter(x=>x.law_cat_cd==='FELONY').reduce((s,x)=>s+ +x.n,0);
+  const mis = rows.filter(x=>x.law_cat_cd==='MISDEMEANOR').reduce((s,x)=>s+ +x.n,0);
+  // expected count for an average NYC area this size, same window
+  const expected = base.cityTotal * circleSqMi(RADIUS) / CITY_LAND_SQMI;
+  const mult = expected > 0 ? total/expected : null;
+  // top offenses (merge law categories per offense)
+  const byOfns = {};
+  rows.forEach(x => byOfns[x.ofns_desc] = (byOfns[x.ofns_desc]||0) + +x.n);
+  const top = Object.entries(byOfns).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  // precinct rank
+  const myPct = ctx.precinct;
+  const rank = myPct ? base.pctRates.findIndex(r=>r.pct===myPct)+1 : 0;
+  // sparkline: merge months
+  const months = {};
+  sparkOld.forEach(r => months[r.m.slice(0,7)] = +r.n);
+  sparkNew.forEach(r => months[r.m.slice(0,7)] = +r.n);
+  const keys = Object.keys(months).sort().slice(-13);
+  const maxV = Math.max(1, ...keys.map(k=>months[k]));
+  const spark = keys.length >= 4 ? `<svg width="100%" height="46" viewBox="0 0 ${keys.length*14} 46" preserveAspectRatio="none" style="margin:6px 0 0">`+
+    keys.map((k,i)=>{
+      const h = Math.max(1.5, months[k]/maxV*34);
+      const isNew = k >= base.start.slice(0,7);
+      return `<rect x="${i*14+2}" y="${40-h}" width="10" height="${h}" rx="2" fill="${isNew?'#f2b418':'#c5bda6'}"><title>${k}: ${months[k]}</title></rect>`;
+    }).join('')+`</svg>
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:#8a8f9e"><span>${keys[0]}</span><span>monthly complaints</span><span>${keys[keys.length-1]}</span></div>` : '';
+  const pc = n => n==null?'—':fmt(Math.round(n));
+  const delta = prev > 0 ? (total-prev)/prev*100 : null;
+  let h = `<div class="row"><span class="k">Crime complaints within 500 meters, ${fmtWindow(base.start, base.end)}</span><span class="v bignum">${fmt(total)}</span></div>
+    <div class="statpair">
+      <div class="g"><b>${mult!=null ? mult.toFixed(1)+'×' : '—'}</b><span>the citywide average for an area this size (${pc(expected)})</span></div>
+      <div class="g"><b style="${delta!=null&&delta>0?'color:#b3382c':delta!=null&&delta<0?'color:#1f7a4d':''}">${delta==null?'—':(delta>0?'+':'')+delta.toFixed(0)+'%'}</b><span>vs. the same dates last year (${fmt(prev)})</span></div>
+      <div class="g"><b>${rank?`${rank} of ${base.pctRates.length}`:'—'}</b><span>precinct rank, complaints per square mile (1 = most)</span></div>
+    </div>
+    <div class="row"><span class="k">Of which</span><span class="v">${fmt(fel)} felonies · ${fmt(mis)} misdemeanors<span class="meta">${fmt(total-fel-mis)} violations</span></span></div>
+    ${spark}`;
+  if (top.length) h += `<ul class="toplist" style="margin-top:8px">`+top.map(([k,n])=>`<li><span>${titleCaseOfns(k)}</span><span class="n">${fmt(n)}</span></li>`).join('')+`</ul>`;
+  h += `<div class="note">Counted by report date; the police department posts this data quarterly, so the window above is the latest it covers. The citywide comparison divides all complaints evenly over the city's land area — dense, busy places sit far above that line by nature. Raw complaint counts also reflect foot traffic and reporting behavior, and locations of sex crimes and some other offenses are withheld. Context, not a safety score.</div>`;
+  $('crime').innerHTML = h;
 }
 function titleCaseOfns(s){
   if (!s) return '—';
