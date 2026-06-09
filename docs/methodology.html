@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Methodology — The Everything Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#16213a; --paper:#f7f4ec; --gold:#d99a00; --line:#d8d0bd}
+*{box-sizing:border-box; margin:0}
+body{font-family:'Archivo',sans-serif; color:var(--ink); background:var(--paper); line-height:1.65; font-size:15.5px}
+main{max-width:760px; margin:0 auto; padding:48px 24px 80px}
+h1{font-family:'Fraunces',serif; font-weight:900; font-size:38px; line-height:1.05; margin-bottom:8px}
+h2{font-family:'Fraunces',serif; font-weight:600; font-size:23px; margin:36px 0 10px; padding-top:18px; border-top:2px solid var(--ink)}
+h3{font-size:15px; margin:20px 0 6px; text-transform:uppercase; letter-spacing:.08em; font-weight:700; color:#3d4a6b}
+p{margin-bottom:12px}
+ul{margin:0 0 12px 22px}
+li{margin-bottom:6px}
+a{color:var(--ink); text-decoration-color:var(--gold); text-underline-offset:2px}
+table{border-collapse:collapse; width:100%; margin:10px 0 16px; font-size:13.5px}
+th,td{text-align:left; border-bottom:1px solid var(--line); padding:7px 10px 7px 0; vertical-align:top}
+th{font-size:11.5px; text-transform:uppercase; letter-spacing:.08em}
+.k{font-size:12px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#b3382c}
+.back{display:inline-block; margin-bottom:26px; font-weight:700; font-size:13px}
+code{background:#efe9da; border-radius:4px; padding:1px 6px; font-size:13px}
+</style>
+</head>
+<body>
+<main>
+<a class="back" href="index.html">← Back to the map</a>
+<div class="k">The everything map</div>
+<h1>Methodology and data sources</h1>
+<p>Last updated June 9, 2026. Everything below is the complete recipe — no part of this site is a black box.</p>
+
+<h2>What the map does</h2>
+<p>When you search an address or click a point, the site does three things:</p>
+<ul>
+<li><b>Geocoding.</b> Addresses are matched with the Department of City Planning's free <a href="https://geosearch.planninglabs.nyc/">GeoSearch</a> service, which also supplies the tax lot number (borough-block-lot, or BBL) for property lookups. Map clicks are reverse geocoded to the nearest address point; when that point is more than 40 meters away the panel says so.</li>
+<li><b>Boundary lookups.</b> The point is tested against 13 boundary files stored with the site (point-in-polygon, computed in your browser). Nothing is sent to a server for this step.</li>
+<li><b>Live queries.</b> Four feeds on <a href="https://opendata.cityofnewyork.us/">NYC Open Data</a> are queried at the moment you click: property records, 311 complaints, police complaint data and restaurant inspection grades.</li>
+</ul>
+
+<h2>Boundary layers</h2>
+<table>
+<tr><th>Layer</th><th>Source dataset</th></tr>
+<tr><td>Neighborhoods (2020 neighborhood tabulation areas)</td><td><a href="https://data.cityofnewyork.us/City-Government/2020-Neighborhood-Tabulation-Areas-NTAs-/9nt8-h7nd">9nt8-h7nd</a></td></tr>
+<tr><td>Community districts</td><td><a href="https://data.cityofnewyork.us/City-Government/Community-Districts/5crt-au7u">5crt-au7u</a></td></tr>
+<tr><td>City Council districts (2023 lines)</td><td><a href="https://data.cityofnewyork.us/City-Government/City-Council-Districts/872g-cjhh">872g-cjhh</a></td></tr>
+<tr><td>Police precincts</td><td><a href="https://data.cityofnewyork.us/Public-Safety/Police-Precincts/y76i-bdw7">y76i-bdw7</a></td></tr>
+<tr><td>School districts</td><td><a href="https://data.cityofnewyork.us/Education/School-Districts/8ugf-3d8u">8ugf-3d8u</a></td></tr>
+<tr><td>Elementary school zones 2024-2025</td><td><a href="https://data.cityofnewyork.us/Education/School-Zones-2024-2025-Elementary-School-/cmjf-yawu">cmjf-yawu</a></td></tr>
+<tr><td>Middle school zones 2024-2025</td><td><a href="https://data.cityofnewyork.us/Education/School-Zones-2024-2025-Middle-School-/t26j-jbq7">t26j-jbq7</a></td></tr>
+<tr><td>Sanitation districts</td><td><a href="https://data.cityofnewyork.us/City-Government/DSNY-Districts/i6mn-amj2">i6mn-amj2</a></td></tr>
+<tr><td>Congressional districts</td><td><a href="https://data.cityofnewyork.us/City-Government/Congressional-Districts/j3u5-usz2">j3u5-usz2</a></td></tr>
+<tr><td>State Assembly districts</td><td><a href="https://data.cityofnewyork.us/City-Government/State-Assembly-Districts/5yfv-9hkp">5yfv-9hkp</a></td></tr>
+<tr><td>State Senate districts</td><td><a href="https://data.cityofnewyork.us/City-Government/State-Senate-Districts/afns-vxeu">afns-vxeu</a></td></tr>
+<tr><td>Hurricane evacuation zones</td><td><a href="https://data.cityofnewyork.us/Public-Safety/Hurricane-Evacuation-Zones/epne-qv9x">epne-qv9x</a></td></tr>
+<tr><td>Historic districts (designated only)</td><td><a href="https://data.cityofnewyork.us/Housing-Development/Historic-Districts/skyk-mpzq">skyk-mpzq</a></td></tr>
+</table>
+<p>All layers were downloaded June 9, 2026 and simplified with mapshaper (weighted Visvalingam, 2 meter interval) to keep the download reasonable. These are City Planning's shoreline-clipped files, so lookups stop at the water's edge.</p>
+
+<h3>Accuracy check</h3>
+<p>The lookup machinery was validated against city records that carry both coordinates and an official district label:</p>
+<ul>
+<li><b>Police precincts:</b> 900 randomly drawn complaint records. 873 matched the precinct on the record. Of the 27 disagreements, 25 were cases where the police department's own label differs from the official precinct map at that coordinate (complaints are sometimes filed to a precinct other than where the dot falls, and many dots are snapped to street centerlines that are themselves the boundary). Only 2 of 900 — both on the same Brooklyn boundary street — were caused by our simplified geometry, an error rate of about 0.2% concentrated entirely on points sitting exactly on a district line.</li>
+<li><b>Community districts:</b> 880 randomly drawn 311 records, 99.5% agreement, with the handful of mismatches again on boundary lines plus Marble Hill, the Manhattan neighborhood on the Bronx side of the Harlem River that agencies code inconsistently.</li>
+</ul>
+<p>Practical upshot: if an address sits directly on a district boundary, the map can return the district on the other side of the street. Everywhere else it agrees with the city's own files.</p>
+
+<h2>Elected officials</h2>
+<ul>
+<li><b>City Council:</b> scraped from the Council's official <a href="https://council.nyc.gov/districts/">district directory</a> on June 9, 2026. All 51 districts have a sitting member in the file.</li>
+<li><b>United States House and Senate:</b> the <a href="https://github.com/unitedstates/congress-legislators">unitedstates/congress-legislators</a> project, a maintained public dataset of current members.</li>
+<li><b>State Senate and Assembly:</b> <a href="https://openstates.org/">Open States</a> current-legislator files for New York. Every Senate and Assembly district that touches the five boroughs has a named member.</li>
+<li><b>Citywide and borough officials</b> (mayor, public advocate, comptroller, borough presidents, district attorneys): verified against official office websites and contemporaneous news coverage of the January 1, 2026 inaugurations.</li>
+</ul>
+<p>Officeholders change. The "as of" date for everything above is June 9, 2026; special elections after that date will not be reflected until the data is refreshed.</p>
+
+<h2>Demographics</h2>
+<p>Neighborhood figures come from the Department of City Planning's compilation of the <b>American Community Survey 2016-2020 five year estimates</b> at the neighborhood tabulation area level (the most recent NTA-level release City Planning publishes in this format; downloaded from the <a href="https://www.nyc.gov/site/planning/data-maps/open-data/dwn-acs-nta.page">DCP ACS page</a>). Citywide and borough comparison values were pulled from the Census Bureau API for the same 2016-2020 vintage, so the comparison is apples to apples.</p>
+<ul>
+<li>"Rent burdened" is the share of renting households paying 30 percent or more of income in gross rent (sum of the Census Bureau's 30-34.9 percent and 35 percent plus categories).</li>
+<li>Race and ethnicity categories are mutually exclusive: Hispanic of any race, then non-Hispanic white, Black and Asian alone; "other / two+" is the remainder.</li>
+<li>These are survey estimates with real margins of error, larger in small neighborhoods. Differences of a few percentage points between a neighborhood and the city may not be meaningful.</li>
+<li>Parks, airports, cemeteries and other special-use areas are flagged instead of profiled.</li>
+</ul>
+
+<h2>Live feeds</h2>
+<table>
+<tr><th>Panel item</th><th>Dataset</th><th>Query</th></tr>
+<tr><td>This lot</td><td><a href="https://data.cityofnewyork.us/City-Government/Primary-Land-Use-Tax-Lot-Output-PLUTO-/64uk-42ks">PLUTO (64uk-42ks)</a></td><td>By the tax lot number GeoSearch returns for the address. Zoning, land use, year built, floor area ratio, units, assessed value and owner of record are shown as published. PLUTO's "year built" is known to be approximate for pre-war buildings.</td></tr>
+<tr><td>311 complaints</td><td><a href="https://data.cityofnewyork.us/Social-Services/311-Service-Requests-from-2010-to-Present/erm2-nwe9">erm2-nwe9</a></td><td>Created in the last 90 days within 250 meters of the point, grouped by complaint type.</td></tr>
+<tr><td>Crime complaints</td><td><a href="https://data.cityofnewyork.us/Public-Safety/NYPD-Complaint-Data-Current-Year-To-Date-/5uac-w243">NYPD complaint data, year to date (5uac-w243)</a></td><td>Reported since January 1 of the current year (dated by report date, not occurrence date) within 500 meters. Note that complaint counts reflect both crime and reporting behavior, the circle ignores neighborhood lines, and the police department withholds or blurs coordinates for certain offenses, notably sex crimes, so sensitive categories are undercounted in any radius search.</td></tr>
+<tr><td>Restaurant grades</td><td><a href="https://data.cityofnewyork.us/Health/DOHMH-New-York-City-Restaurant-Inspection-Results/43nn-pn8j">43nn-pn8j</a></td><td>Latest posted letter grade per restaurant within 200 meters, from inspections in the last two years.</td></tr>
+</table>
+<p>Live queries hit NYC Open Data without an application token, which the city rate-limits but allows. If a feed is briefly unavailable the panel says so rather than showing stale numbers.</p>
+
+<h2>Other lookups</h2>
+<ul>
+<li><b>Subway:</b> station locations and routes from the <a href="https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f">Metropolitan Transportation Authority stations file</a> (496 stations including Staten Island Railway). Walk times assume 80 meters per minute in a straight line, so real walks are a bit longer.</li>
+<li><b>Hurricane zones:</b> the city's six evacuation zones, shown as published. The source file also contains two codes ("X" and "7") for territory outside any evacuation zone — "X" for most upland areas and "7" for certain large parks. The map shows both as "not in an evacuation zone," matching the official <a href="https://finder.nyc.gov/hurricane">Know Your Zone finder</a>, which shows no zone for those areas.</li>
+<li><b>School zone links</b> go to the Department of Education page for each school's code. Zone files are for 2024-2025; zones change, and some districts use choice systems with no zoned school.</li>
+<li><b>Precinct links:</b> all 78 generated precinct page links (including the new 116th Precinct in Queens) were verified to resolve on nyc.gov.</li>
+</ul>
+
+<h2>Known limitations</h2>
+<ul>
+<li>Boundary-line addresses can resolve to the adjacent district (see accuracy check above).</li>
+<li>Marble Hill and other administrative oddities are shown geographically.</li>
+<li>The demographic vintage (2016-2020) predates pandemic-era population shifts.</li>
+<li>Live counts are raw complaint volumes, not rates, and say as much about density and reporting as about conditions.</li>
+<li>The "owner of record" in PLUTO is often an LLC and may lag recent sales.</li>
+</ul>
+
+<h2>Code and contact</h2>
+<p>The site is a single static page; the full pipeline (download, simplification, validation and extraction scripts) lives in the project repository. Built with Leaflet, mapshaper, City Planning GeoSearch and NYC Open Data. Built with AI assistance and human review; corrections are welcome.</p>
+</main>
+</body>
+</html>

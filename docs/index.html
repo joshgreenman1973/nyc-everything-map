@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Everything Map — New York City</title>
+<meta name="description" content="Pick any point in the five boroughs and learn everything about it: neighborhood, representatives, precinct, schools, zoning, demographics and live city data.">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#16213a; --ink-soft:#3d4a6b; --paper:#f7f4ec; --paper-deep:#efe9da;
+  --gold:#f2b418; --gold-deep:#d99a00; --line:#d8d0bd; --white:#fffdf8;
+  --green:#1f7a4d; --red:#b3382c; --maroon:#7a2230; --navy:#1a2238;
+  --shadow:0 10px 40px rgba(22,33,58,.18);
+}
+*{box-sizing:border-box; margin:0}
+html,body{height:100%}
+body{font-family:'Archivo',sans-serif; color:var(--ink); background:var(--paper); overflow:hidden}
+#map{position:absolute; inset:0; background:#e8e4d8}
+.leaflet-container{font:inherit}
+
+/* ---------- landing hero ---------- */
+#hero{position:absolute; z-index:1000; left:50%; top:14%; transform:translateX(-50%);
+  width:min(620px, calc(100vw - 32px)); text-align:center; pointer-events:none; transition:opacity .45s, transform .45s}
+#hero.hidden{opacity:0; transform:translateX(-50%) translateY(-24px); pointer-events:none !important}
+#hero .card{pointer-events:auto; background:var(--white); border:2px solid var(--ink); border-radius:14px;
+  box-shadow:var(--shadow); padding:30px 30px 24px}
+#hero h1{font-family:'Fraunces',serif; font-weight:900; font-size:clamp(30px,5vw,44px); line-height:1.02; letter-spacing:-.01em}
+#hero h1 .gold{color:var(--gold-deep)}
+#hero p.sub{margin:10px auto 18px; max-width:46ch; color:var(--ink-soft); font-size:15px; line-height:1.45}
+.examples{margin-top:14px; display:flex; gap:8px; flex-wrap:wrap; justify-content:center}
+.examples button{font:600 12px 'Archivo'; padding:6px 11px; border-radius:999px; border:1.5px solid var(--line);
+  background:var(--paper); color:var(--ink-soft); cursor:pointer; transition:.15s}
+.examples button:hover{border-color:var(--gold-deep); color:var(--ink); background:#fdf4dc}
+
+/* ---------- search ---------- */
+.searchwrap{position:relative; pointer-events:auto}
+#searchbox{display:flex; align-items:center; background:var(--white); border:2px solid var(--ink); border-radius:10px; overflow:hidden}
+#hero #searchbox{border-width:2px}
+#searchbox svg{flex:none; margin:0 4px 0 14px}
+#search{flex:1; min-width:0; border:0; outline:0; background:transparent; padding:14px 8px 14px 6px; font:500 16px 'Archivo'; color:var(--ink)}
+#search::placeholder{color:#9aa0b0}
+#locbtn{flex:none; border:0; background:var(--gold); color:var(--ink); font:700 13px 'Archivo'; padding:0 16px; align-self:stretch; cursor:pointer; border-left:2px solid var(--ink)}
+#locbtn:hover{background:var(--gold-deep)}
+#suggest{position:absolute; top:calc(100% + 6px); left:0; right:0; background:var(--white); border:2px solid var(--ink);
+  border-radius:10px; box-shadow:var(--shadow); overflow:hidden; display:none; text-align:left; z-index:1200}
+#suggest div{padding:11px 14px; font-size:14px; cursor:pointer; border-bottom:1px solid var(--paper-deep)}
+#suggest div:last-child{border-bottom:0}
+#suggest div:hover,#suggest div.active{background:#fdf4dc}
+#suggest .muted{color:#8a8f9e; font-size:12px}
+
+/* compact search pill once panel is open */
+#topsearch{position:absolute; z-index:1001; top:14px; left:calc((100vw + 430px)/2); transform:translateX(-50%);
+  width:min(440px, calc(100vw - 480px)); display:none}
+#topsearch #searchbox2{display:flex; align-items:center; background:var(--white); border:2px solid var(--ink); border-radius:999px; box-shadow:0 4px 18px rgba(22,33,58,.22); overflow:hidden}
+#topsearch input{flex:1; min-width:0; border:0; outline:0; background:transparent; padding:10px 8px 10px 16px; font:500 14px 'Archivo'}
+#topsearch button{border:0; background:var(--gold); font:700 12px 'Archivo'; padding:0 14px; align-self:stretch; cursor:pointer; border-left:2px solid var(--ink); border-radius:0 999px 999px 0}
+#topsearch .searchwrap{width:100%}
+#topsearch #suggest2{position:absolute; top:calc(100% + 6px); left:0; right:0; background:var(--white); border:2px solid var(--ink); border-radius:12px; box-shadow:var(--shadow); overflow:hidden; display:none; z-index:1200}
+#topsearch #suggest2 div{padding:10px 14px; font-size:13px; cursor:pointer; border-bottom:1px solid var(--paper-deep)}
+#topsearch #suggest2 div:hover,#topsearch #suggest2 div.active{background:#fdf4dc}
+
+/* ---------- loading chip ---------- */
+#loadchip{position:absolute; z-index:1100; bottom:18px; left:50%; transform:translateX(-50%);
+  background:var(--navy); color:#fff; font:600 12px 'Archivo'; padding:8px 16px; border-radius:999px;
+  box-shadow:var(--shadow); display:flex; gap:10px; align-items:center; transition:opacity .4s}
+#loadchip.done{opacity:0; pointer-events:none}
+#loadchip .dot{width:8px; height:8px; border-radius:50%; background:var(--gold); animation:pulse 1s infinite alternate}
+@keyframes pulse{from{opacity:.35; transform:scale(.8)} to{opacity:1; transform:scale(1.15)}}
+
+/* ---------- panel ---------- */
+#panel{position:absolute; z-index:1002; top:0; left:0; bottom:0; width:min(430px,100vw);
+  background:var(--paper); border-right:2px solid var(--ink); box-shadow:14px 0 50px rgba(22,33,58,.22);
+  transform:translateX(-104%); transition:transform .45s cubic-bezier(.22,.9,.32,1); display:flex; flex-direction:column}
+#panel.open{transform:none}
+#panel .scroller{overflow-y:auto; flex:1; overscroll-behavior:contain; scrollbar-width:thin}
+#closepanel{position:absolute; top:12px; right:12px; z-index:5; width:34px; height:34px; border-radius:50%;
+  border:2px solid var(--ink); background:var(--white); cursor:pointer; font:700 16px/1 'Archivo'; color:var(--ink)}
+#closepanel:hover{background:var(--gold)}
+.phead{background:var(--navy); color:var(--white); padding:26px 26px 20px; position:relative; overflow:hidden}
+.phead::after{content:""; position:absolute; inset:auto 0 0 0; height:6px;
+  background:repeating-linear-gradient(90deg,var(--gold) 0 18px, var(--navy) 18px 26px)}
+.phead .kicker{font:700 11px 'Archivo'; letter-spacing:.16em; text-transform:uppercase; color:var(--gold); display:flex; gap:8px; align-items:center}
+.phead h2{font-family:'Fraunces',serif; font-weight:900; font-size:25px; line-height:1.08; margin:8px 0 4px; letter-spacing:-.01em}
+.phead .sub{color:#c6cde0; font-size:13px; line-height:1.45}
+.phead .nearnote{color:#9aa3c0; font-size:11.5px; margin-top:6px; font-style:italic}
+.phead .actions{margin-top:12px; display:flex; gap:8px}
+.phead .actions button{font:600 11px 'Archivo'; padding:5px 12px; border-radius:999px; cursor:pointer;
+  border:1.5px solid rgba(255,255,255,.35); background:transparent; color:#dfe4f2}
+.phead .actions button:hover{border-color:var(--gold); color:var(--gold)}
+
+section.blk{border-bottom:1px solid var(--line); padding:18px 26px 20px}
+section.blk:last-of-type{border-bottom:0}
+.blk h3{display:flex; align-items:baseline; gap:10px; font:700 12px 'Archivo'; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:13px}
+.blk h3 .num{font-family:'Fraunces',serif; font-weight:900; font-size:19px; color:var(--gold-deep); letter-spacing:0}
+.row{display:flex; justify-content:space-between; gap:14px; padding:7px 8px; margin:0 -8px; border-radius:8px; font-size:14px; line-height:1.4}
+.row .k{color:var(--ink-soft); flex:none; max-width:46%}
+.row .v{text-align:right; font-weight:600}
+.row .v .meta{display:block; font-weight:400; font-size:12px; color:#8a8f9e}
+.row.hl{cursor:pointer; transition:background .12s}
+.row.hl:hover{background:#f3e9c8}
+.row.hl:hover .k::after{content:" ⬡"; color:var(--gold-deep)}
+.row a{color:inherit; text-decoration:underline; text-decoration-color:var(--gold-deep); text-underline-offset:2px}
+.bignum{font-family:'Fraunces',serif; font-weight:900; font-size:26px; line-height:1}
+.badge{display:inline-block; font:700 11px 'Archivo'; padding:3px 10px; border-radius:999px; border:1.5px solid currentColor}
+.badge.zone1,.badge.zone2{color:var(--red)} .badge.zone3,.badge.zone4{color:#b06a00} .badge.zone5,.badge.zone6{color:var(--green)}
+.badge.nozone{color:var(--ink-soft)}
+.badge.hist{color:#6b4ba1}
+.party{font-size:11px; font-weight:700; border-radius:3px; padding:1px 5px; margin-left:6px; vertical-align:1px}
+.party.D{background:#dbe7ff; color:#1d4ed8} .party.R{background:#ffe0db; color:#b3382c} .party.O{background:#eee; color:#555}
+.note{font-size:11.5px; color:#8a8f9e; line-height:1.5; margin-top:10px}
+.spin{display:inline-block; width:13px; height:13px; border:2px solid var(--line); border-top-color:var(--gold-deep); border-radius:50%; animation:rot .7s linear infinite; vertical-align:-2px}
+@keyframes rot{to{transform:rotate(360deg)}}
+.errnote{font-size:12.5px; color:var(--red)}
+
+/* demographic compare bars */
+.cmp{margin:4px 0 10px}
+.cmp .lab{display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:3px}
+.cmp .lab b{font-weight:700}
+.cmp .track{position:relative; height:12px; background:var(--paper-deep); border-radius:6px; border:1px solid var(--line)}
+.cmp .fill{position:absolute; left:0; top:0; bottom:0; background:var(--gold); border-radius:6px 0 0 6px; min-width:2px}
+.cmp .citymark{position:absolute; top:-3px; bottom:-3px; width:2.5px; background:var(--navy)}
+.cmp .cityval{font-size:10.5px; color:#8a8f9e}
+.legendline{display:flex; gap:14px; align-items:center; font-size:10.5px; color:#8a8f9e; margin-bottom:10px}
+.legendline .sw{display:inline-block; width:14px; height:8px; background:var(--gold); border-radius:3px; margin-right:4px; vertical-align:-1px}
+.legendline .mk{display:inline-block; width:2.5px; height:11px; background:var(--navy); margin-right:5px; vertical-align:-2px}
+.racebar{display:flex; height:20px; border-radius:7px; overflow:hidden; border:1.5px solid var(--ink); margin:6px 0 6px}
+.racebar div{height:100%}
+.racekey{display:flex; flex-wrap:wrap; gap:4px 12px; font-size:11px; color:var(--ink-soft); margin-bottom:6px}
+.racekey i{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:4px}
+
+/* live lists */
+ul.toplist{list-style:none; margin-top:2px}
+ul.toplist li{display:flex; justify-content:space-between; gap:10px; font-size:13.5px; padding:5px 0; border-bottom:1px dashed var(--line)}
+ul.toplist li:last-child{border-bottom:0}
+ul.toplist .n{font-weight:700; font-variant-numeric:tabular-nums}
+.subwayline{display:inline-block; width:19px; height:19px; border-radius:50%; color:#fff; font:700 11px/19px 'Archivo'; text-align:center; margin-left:3px; vertical-align:-4px}
+.grades{display:flex; gap:8px; margin-top:4px}
+.grades .g{flex:1; text-align:center; border:1.5px solid var(--line); border-radius:9px; padding:8px 4px; background:var(--white)}
+.grades .g b{font-family:'Fraunces',serif; font-size:21px; display:block}
+.grades .gA b{color:var(--green)} .grades .gB b{color:#b06a00} .grades .gC b{color:var(--red)}
+.grades .g span{font-size:10.5px; color:#8a8f9e}
+
+.pfoot{padding:16px 26px 22px; background:var(--paper-deep); border-top:1.5px solid var(--line); font-size:11.5px; color:var(--ink-soft); line-height:1.55}
+.pfoot a{color:var(--ink); font-weight:600}
+
+/* attribution + utility buttons */
+#aicaution{position:absolute; z-index:1003; bottom:16px; left:16px; background:var(--maroon); color:#fff;
+  border:0; border-radius:999px; font:700 12px 'Archivo'; padding:9px 16px; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.25)}
+#aicaution:hover{filter:brightness(1.15)}
+#aipop{position:absolute; z-index:1004; bottom:62px; left:16px; width:min(360px, calc(100vw - 32px));
+  background:var(--navy); color:#e8ecf8; border-radius:14px; padding:18px 20px; box-shadow:var(--shadow);
+  font-size:12.5px; line-height:1.55; display:none}
+#aipop.show{display:block}
+#aipop h4{font-family:'Fraunces',serif; font-size:16px; color:var(--gold); margin-bottom:8px}
+#aipop ul{margin:6px 0 8px 16px}
+#aipop li{margin-bottom:4px}
+#aipop a{color:var(--gold)}
+#methlink{position:absolute; z-index:1003; bottom:16px; right:16px; background:var(--white); border:2px solid var(--ink);
+  color:var(--ink); border-radius:999px; font:700 12px 'Archivo'; padding:8px 15px; text-decoration:none; box-shadow:0 4px 14px rgba(22,33,58,.18)}
+#methlink:hover{background:var(--gold)}
+
+@media (max-width:720px){
+  #panel{top:auto; height:72vh; width:100vw; border-right:0; border-top:2px solid var(--ink);
+    border-radius:18px 18px 0 0; transform:translateY(110%)}
+  #panel.open{transform:none}
+  #hero{top:9%}
+  #methlink{bottom:auto; top:14px; right:12px}
+  #aicaution{bottom:auto; top:14px; left:12px; padding:8px 12px}
+  #aipop{bottom:auto; top:60px; left:12px}
+  #topsearch{top:60px; left:50%; width:calc(100vw - 24px)}
+}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="hero">
+  <div class="card">
+    <h1>The <span class="gold">everything</span> map</h1>
+    <p class="sub">Pick any point in the five boroughs of New York City — an address, a corner, a park bench — and learn what district it sits in, who represents it, how the neighborhood lives and what the city's data says about the block.</p>
+    <div class="searchwrap">
+      <div id="searchbox">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#16213a" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="search" type="text" autocomplete="off" placeholder="Type an address or place…">
+        <button id="locbtn" title="Use my location">⌖ near me</button>
+      </div>
+      <div id="suggest"></div>
+    </div>
+    <div class="examples">
+      <button data-q="350 Fifth Avenue, Manhattan">Empire State Building</button>
+      <button data-q="Yankee Stadium, Bronx">Yankee Stadium</button>
+      <button data-q="620 Atlantic Avenue, Brooklyn">Barclays Center</button>
+      <button data-q="Flushing Main Street, Queens">Flushing</button>
+      <button data-q="75 Richmond Terrace, Staten Island">St. George</button>
+    </div>
+  </div>
+</div>
+
+<div id="topsearch">
+  <div class="searchwrap">
+    <div id="searchbox2">
+      <input id="search2" type="text" autocomplete="off" placeholder="Search another address…">
+      <button id="locbtn2" title="Use my location">⌖</button>
+    </div>
+    <div id="suggest2"></div>
+  </div>
+</div>
+
+<div id="loadchip"><span class="dot"></span><span id="loadmsg">Loading boundary layers…</span></div>
+
+<aside id="panel" aria-label="Location details">
+  <button id="closepanel" title="Close">×</button>
+  <div class="scroller" id="panelbody"></div>
+</aside>
+
+<button id="aicaution">⚠ AI caution</button>
+<div id="aipop">
+  <h4>Read this before you rely on the map</h4>
+  This site was built with AI assistance. Quality checks that were done: boundary lookups were validated against 900 New York Police Department records (99.8% agreement net of records the department itself labels differently) and 880 311 records; every elected official was checked against an official or maintained public source in June 2026; demographic figures were spot-checked against published American Community Survey tables. Quality checks that were <b>not</b> done: not every one of the thousands of possible lookups has been human-reviewed, live feeds (311, crime, property data) are shown as the city publishes them and zoned school assignments can change year to year. Verify anything consequential with the agency itself. <a href="methodology.html">Full methodology</a>.
+</div>
+<a id="methlink" href="methodology.html">Methodology</a>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ============================== setup ============================== */
+const map = L.map('map', {zoomControl:false, attributionControl:true})
+  .setView([40.7128,-73.9560], 11);
+L.control.zoom({position:'bottomright'}).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+  maxZoom:19}).addTo(map);
+
+const $ = id => document.getElementById(id);
+const LAYERS = {};
+const DATA = {};
+const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic'];
+const DATA_FILES = ['officials','nta_demographics','compare_geos','subway'];
+let loaded = 0, totalFiles = LAYER_FILES.length + DATA_FILES.length;
+
+function tick(){
+  loaded++;
+  $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
+  if (loaded >= totalFiles){ $('loadchip').classList.add('done'); }
+}
+const ready = Promise.all([
+  ...LAYER_FILES.map(f => fetch(`data/${f}.json`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
+  ...DATA_FILES.map(f => fetch(`data/${f}.json`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
+]).catch(e => { $('loadmsg').textContent = 'Some data failed to load — try refreshing.'; console.error(e); });
+
+/* ---------- point-in-polygon with bbox index ---------- */
+function ringContains(ring, x, y){
+  let inside = false;
+  for (let i=0, j=ring.length-1; i<ring.length; j=i++){
+    const xi=ring[i][0], yi=ring[i][1], xj=ring[j][0], yj=ring[j][1];
+    if (((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) inside = !inside;
+  }
+  return inside;
+}
+function polyContains(coords, x, y){ // GeoJSON Polygon coords
+  if (!ringContains(coords[0], x, y)) return false;
+  for (let k=1;k<coords.length;k++) if (ringContains(coords[k],x,y)) return false;
+  return true;
+}
+function featContains(f, x, y){
+  const g = f.geometry;
+  if (!g) return false;
+  if (g.type === 'Polygon') return polyContains(g.coordinates, x, y);
+  if (g.type === 'MultiPolygon') return g.coordinates.some(p => polyContains(p, x, y));
+  return false;
+}
+function bboxOf(g){
+  let minx=180,miny=90,maxx=-180,maxy=-90;
+  const scan = ring => ring.forEach(([x,y])=>{ if(x<minx)minx=x; if(x>maxx)maxx=x; if(y<miny)miny=y; if(y>maxy)maxy=y; });
+  (g.type==='Polygon'?[g.coordinates]:g.coordinates).forEach(p=>p.forEach(scan));
+  return [minx,miny,maxx,maxy];
+}
+function indexLayer(geojson){
+  geojson.features.forEach(f => f._bb = bboxOf(f.geometry));
+  return geojson;
+}
+function lookup(layer, lat, lng){
+  if (!layer) return null;
+  for (const f of layer.features){
+    const b = f._bb;
+    if (lng<b[0]||lng>b[2]||lat<b[1]||lat>b[3]) continue;
+    if (featContains(f, lng, lat)) return f;
+  }
+  return null;
+}
+
+/* ---------- geocoding ---------- */
+const GEO = 'https://geosearch.planninglabs.nyc/v2';
+async function geocode(text){
+  const r = await fetch(`${GEO}/autocomplete?text=${encodeURIComponent(text)}&size=6`);
+  return (await r.json()).features || [];
+}
+async function reverse(lat,lng){
+  try{
+    const r = await fetch(`${GEO}/reverse?point.lat=${lat}&point.lon=${lng}&size=1`);
+    return (await r.json()).features?.[0] || null;
+  }catch(e){ return null; }
+}
+
+/* ---------- search UI (two instances) ---------- */
+function wireSearch(inputEl, listEl){
+  let items = [], active = -1, t;
+  inputEl.addEventListener('input', () => {
+    clearTimeout(t);
+    const q = inputEl.value.trim();
+    if (q.length < 3){ listEl.style.display='none'; return; }
+    t = setTimeout(async () => {
+      items = await geocode(q);
+      active = -1;
+      listEl.innerHTML = items.map((f,i) =>
+        `<div data-i="${i}">${f.properties.name}<span class="muted"> — ${f.properties.borough||''} ${f.properties.postalcode||''}</span></div>`).join('');
+      listEl.style.display = items.length ? 'block' : 'none';
+    }, 220);
+  });
+  listEl.addEventListener('mousedown', e => {
+    const d = e.target.closest('div[data-i]');
+    if (d) pick(items[+d.dataset.i]);
+  });
+  inputEl.addEventListener('keydown', e => {
+    const divs = listEl.querySelectorAll('div[data-i]');
+    if (e.key==='ArrowDown'){ active=Math.min(active+1, divs.length-1); paint(); e.preventDefault(); }
+    else if (e.key==='ArrowUp'){ active=Math.max(active-1,0); paint(); e.preventDefault(); }
+    else if (e.key==='Enter'){
+      if (active>=0 && items[active]) pick(items[active]);
+      else if (items[0]) pick(items[0]);
+      else if (inputEl.value.trim().length>2) geocode(inputEl.value.trim()).then(f=>f[0]&&pick(f[0]));
+    } else if (e.key==='Escape'){ listEl.style.display='none'; }
+    function paint(){ divs.forEach((d,i)=>d.classList.toggle('active', i===active)); }
+  });
+  document.addEventListener('click', e => { if (!listEl.parentNode.contains(e.target)) listEl.style.display='none'; });
+  function pick(f){
+    listEl.style.display='none';
+    inputEl.value = f.properties.label.replace(', New York, NY, USA','');
+    const [lng,lat] = f.geometry.coordinates;
+    inspect(lat, lng, f);
+  }
+}
+wireSearch($('search'), $('suggest'));
+wireSearch($('search2'), $('suggest2'));
+document.querySelectorAll('.examples button').forEach(b =>
+  b.addEventListener('click', async () => {
+    const f = (await geocode(b.dataset.q))[0];
+    if (f) inspect(f.geometry.coordinates[1], f.geometry.coordinates[0], f);
+  }));
+function locate(){
+  navigator.geolocation?.getCurrentPosition(p => inspect(p.coords.latitude, p.coords.longitude),
+    () => alert('Could not get your location.'), {enableHighAccuracy:true, timeout:8000});
+}
+$('locbtn').addEventListener('click', locate);
+$('locbtn2').addEventListener('click', locate);
+
+/* ---------- map interactions ---------- */
+let pin = null, hoverShape = null;
+map.on('click', e => inspect(e.latlng.lat, e.latlng.lng));
+function dropPin(lat,lng){
+  if (pin) map.removeLayer(pin);
+  pin = L.marker([lat,lng], {icon: L.divIcon({className:'', html:
+    `<svg width="34" height="46" viewBox="0 0 34 46"><path d="M17 1C8.2 1 1 8.2 1 17c0 11.5 16 28 16 28s16-16.5 16-28C33 8.2 25.8 1 17 1z" fill="#f2b418" stroke="#16213a" stroke-width="2.5"/><circle cx="17" cy="17" r="6" fill="#16213a"/></svg>`,
+    iconSize:[34,46], iconAnchor:[17,45]})}).addTo(map);
+}
+function showShape(feature){
+  clearShape();
+  if (!feature) return;
+  hoverShape = L.geoJSON(feature, {style:{color:'#16213a', weight:2.5, fillColor:'#f2b418', fillOpacity:.22, dashArray:'2 6'}}).addTo(map);
+}
+function clearShape(){ if (hoverShape){ map.removeLayer(hoverShape); hoverShape = null; } }
+
+/* ============================== inspect ============================== */
+const fmt = n => n==null ? '—' : (+n).toLocaleString('en-US');
+const money = n => n==null ? '—' : '$' + (+n).toLocaleString('en-US');
+const pct = n => n==null ? '—' : (+n).toFixed(1) + '%';
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function partyTag(p){
+  if (!p) return '';
+  const k = /^dem/i.test(p) ? 'D' : /^rep/i.test(p) ? 'R' : 'O';
+  const letter = k==='O' ? esc(p[0]) : k;
+  return `<span class="party ${k}">${letter}</span>`;
+}
+const ordinal = n => { n=+n; const s=['th','st','nd','rd'], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); };
+
+let current = null; // {lat,lng}
+async function inspect(lat, lng, geoFeature=null){
+  await ready;
+  // bounds guard: rough NYC box
+  if (lat<40.46 || lat>40.95 || lng<-74.30 || lng>-73.65){
+    alert('That point is outside New York City.'); return;
+  }
+  current = {lat,lng};
+  history.replaceState(null,'',`#${lat.toFixed(5)},${lng.toFixed(5)}`);
+  $('hero').classList.add('hidden');
+  $('topsearch').style.display='block';
+  dropPin(lat,lng);
+  // center the pin in the part of the map the panel does not cover
+  const z = Math.max(map.getZoom(), 14);
+  const desktop = window.innerWidth > 720;
+  const px = map.project([lat,lng], z);
+  const center = map.unproject(desktop ? px.subtract([215,0]) : px.add([0,window.innerHeight*0.18]), z);
+  map.flyTo(center, z, {duration:.7});
+
+  // reverse geocode if we don't already have an address feature
+  const rev = geoFeature || await reverse(lat,lng);
+  const props = rev?.properties || {};
+  const bbl = props.addendum?.pad?.bbl || null;
+  // distance from clicked point to returned address point
+  let revDist = null;
+  if (rev && !geoFeature){
+    const [rlng,rlat] = rev.geometry.coordinates;
+    revDist = haversine(lat,lng,rlat,rlng);
+  }
+
+  // static lookups
+  const nta   = lookup(LAYERS.nta, lat, lng);
+  const cd    = lookup(LAYERS.cd, lat, lng);
+  const cc    = lookup(LAYERS.council, lat, lng);
+  const pp    = lookup(LAYERS.precinct, lat, lng);
+  const sd    = lookup(LAYERS.schooldist, lat, lng);
+  const es    = lookup(LAYERS.eszones, lat, lng);
+  const ms    = lookup(LAYERS.mszones, lat, lng);
+  const dsny  = lookup(LAYERS.dsny, lat, lng);
+  const cong  = lookup(LAYERS.congress, lat, lng);
+  const asm   = lookup(LAYERS.assembly, lat, lng);
+  const sen   = lookup(LAYERS.senate, lat, lng);
+  const hurr  = lookup(LAYERS.hurricane, lat, lng);
+  const hist  = lookup(LAYERS.historic, lat, lng);
+
+  const boro = nta?.properties.boroname || props.borough || '';
+  const O = DATA.officials;
+
+  /* ----- header ----- */
+  const addrLine = props.name ? esc(props.name) : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  const subBits = [boro, props.postalcode ? 'ZIP ' + esc(props.postalcode) : null].filter(Boolean).join(' · ');
+  let html = `<div class="phead">
+    <div class="kicker">Point report</div>
+    <h2>${addrLine}</h2>
+    <div class="sub">${nta ? `<b style="color:#fff">${esc(nta.properties.ntaname)}</b> · ` : ''}${subBits}</div>
+    ${revDist!=null && revDist>40 ? `<div class="nearnote">Nearest address point, ${Math.round(revDist)} meters from where you clicked</div>` : ''}
+    <div class="actions"><button id="copylink">Copy link to this spot</button><button id="gsv">Street View ↗</button></div>
+  </div>`;
+
+  /* ----- 1 · the place ----- */
+  const hz = hurr?.properties.hurricane_;
+  const inZone = hz && hz !== 'X' && hz !== '7';
+  html += `<section class="blk"><h3><span class="num">1</span> The place</h3>`;
+  if (nta){
+    const cdtaName = (nta.properties.cdtaname||'').replace(/^\w+\d+\s/,'').replace(/\s\(CD \d+ Equivalent\)/,'');
+    html += row('Neighborhood', `${esc(nta.properties.ntaname)}<span class="meta">Neighborhood tabulation area ${esc(nta.properties.nta2020)}</span>`, 'nta');
+    html += row('Borough', esc(boro));
+    if (cd) html += row('Community district', `${esc(boro)} CD ${+String(cd.properties.boro_cd).slice(1)}<span class="meta">Community Board ${+String(cd.properties.boro_cd).slice(1)}${cdtaName?' · '+esc(cdtaName):''}</span>`, 'cd');
+  } else {
+    html += `<div class="errnote">This point does not fall inside a 2020 neighborhood tabulation area (it may be in water).</div>`;
+  }
+  if (hist) html += row('Historic district', `<span class="badge hist">${esc(hist.properties.area_name)}</span><span class="meta">Landmarks Preservation Commission ${esc(hist.properties.lp_number||'')}</span>`, 'historic');
+  html += row('Hurricane evacuation', inZone
+      ? `<span class="badge zone${esc(hz)}">Zone ${esc(hz)}</span><span class="meta">Zone 1 evacuates first; zone 6 last</span>`
+      : `<span class="badge nozone">Not in an evacuation zone</span>`, inZone ? 'hurricane' : null);
+  html += `</section>`;
+
+  /* ----- 2 · representation ----- */
+  html += `<section class="blk"><h3><span class="num">2</span> Who represents this spot</h3>`;
+  if (cc){
+    const d = String(+cc.properties.coundist), m = O.council[d];
+    html += row('City Council', m ? `<a href="https://council.nyc.gov/district-${d}/" target="_blank" rel="noopener">${esc(m.name)}</a>${partyTag(m.party)}<span class="meta">District ${d}${m.role?' · '+esc(m.role):''}</span>` : `District ${d}`, 'council');
+  }
+  if (boro && O.borough[boro]){
+    html += row('Borough president', esc(O.borough[boro].bp));
+    html += row('District attorney', esc(O.borough[boro].da));
+  }
+  if (cong){
+    const d = String(+cong.properties.cong_dist), m = O.congress[d];
+    html += row('United States House', m ? `${esc(m.name)}${partyTag(m.party)}<span class="meta">New York's ${ordinal(d)} congressional district</span>` : `District ${d}`, 'congress');
+  }
+  if (sen){
+    const d = String(+sen.properties.st_sen_dist), m = O.senate[d];
+    html += row('State Senate', m ? `${esc(m.name)}${partyTag(m.party)}<span class="meta">District ${d}</span>` : `District ${d}`, 'senate');
+  }
+  if (asm){
+    const d = String(+asm.properties.assembly_district), m = O.assembly[d];
+    html += row('State Assembly', m ? `${esc(m.name)}${partyTag(m.party)}<span class="meta">District ${d}</span>` : `District ${d}`, 'assembly');
+  }
+  html += row('Mayor', `${esc(O.citywide.mayor.name)}${partyTag(O.citywide.mayor.party)}`);
+  html += row('Public advocate', `${esc(O.citywide.public_advocate.name)}${partyTag(O.citywide.public_advocate.party)}`);
+  html += row('Comptroller', `${esc(O.citywide.comptroller.name)}${partyTag(O.citywide.comptroller.party)}`);
+  html += row('United States Senate', O.citywide.us_senators.map(s=>esc(s.name)).join('<br>'));
+  html += `<div class="note">Officeholders as of June 2026, from the City Council, the unitedstates legislators project and Open States.</div></section>`;
+
+  /* ----- 3 · services ----- */
+  html += `<section class="blk"><h3><span class="num">3</span> City services</h3>`;
+  if (pp){
+    const n = +pp.properties.precinct;
+    html += row('Police precinct', `<a href="${precinctUrl(n)}" target="_blank" rel="noopener">${n===22?'Central Park Precinct':ordinal(n)+' Precinct'}</a>`, 'precinct');
+  }
+  if (dsny) html += row('Sanitation district', `${esc(dsny.properties.district)}<span class="meta">Department of Sanitation collection district</span>`, 'dsny');
+  if (sd) html += row('School district', `District ${+sd.properties.schooldist}`, 'schooldist');
+  if (es?.properties.label) html += row('Zoned elementary', schoolLinks(es.properties), 'eszones');
+  else html += row('Zoned elementary', `<span class="meta" style="display:inline">No zoned school — choice or unzoned area</span>`);
+  if (ms?.properties.label) html += row('Zoned middle school', schoolLinks(ms.properties), 'mszones');
+  html += `<div class="note">School zones are 2024-2025 and can change; confirm with the school or MySchools before enrolling.</div></section>`;
+
+  /* ----- 4 · the lot (live) ----- */
+  html += `<section class="blk" id="lotblk"><h3><span class="num">4</span> This lot</h3><div id="lotbody"><span class="spin"></span> Pulling property records…</div></section>`;
+
+  /* ----- 5 · around here (live) ----- */
+  html += `<section class="blk" id="nearblk"><h3><span class="num">5</span> Around here</h3>
+    <div id="subwaybody"></div>
+    <div id="c311body" style="margin-top:12px"><span class="spin"></span> 311 complaints nearby…</div>
+    <div id="crimebody" style="margin-top:12px"><span class="spin"></span> Crime reports nearby…</div>
+    <div id="foodbody" style="margin-top:12px"><span class="spin"></span> Restaurant grades nearby…</div>
+  </section>`;
+
+  /* ----- 6 · neighborhood numbers ----- */
+  html += demographicsBlock(nta, boro);
+
+  html += `<div class="pfoot">Boundaries and demographics: New York City Department of City Planning and the United States Census Bureau (American Community Survey 2016-2020). Live feeds: NYC Open Data. Lookups are point-in-polygon against simplified boundaries — addresses sitting exactly on a district line can resolve to the neighbor. <a href="methodology.html">How this all works →</a></div>`;
+
+  $('panelbody').innerHTML = html;
+  $('panel').classList.add('open');
+  $('panelbody').scrollTop = 0;
+
+  // wire hover highlights
+  const featMap = {nta, cd, council:cc, precinct:pp, schooldist:sd, eszones:es, mszones:ms, dsny, congress:cong, assembly:asm, senate:sen, hurricane:hurr, historic:hist};
+  document.querySelectorAll('#panelbody .row.hl').forEach(r => {
+    r.addEventListener('mouseenter', () => showShape(featMap[r.dataset.layer]));
+    r.addEventListener('mouseleave', clearShape);
+  });
+  $('copylink')?.addEventListener('click', e => {
+    navigator.clipboard.writeText(location.href).then(()=>{ e.target.textContent='Copied ✓'; setTimeout(()=>e.target.textContent='Copy link to this spot',1500); });
+  });
+  $('gsv')?.addEventListener('click', () => window.open(`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`,'_blank'));
+
+  // fire live queries
+  renderSubway(lat,lng);
+  fetchLot(bbl, revDist);
+  fetch311(lat,lng);
+  fetchCrime(lat,lng);
+  fetchFood(lat,lng);
+}
+
+function row(k, v, layerKey=null){
+  return `<div class="row${layerKey?' hl':''}"${layerKey?` data-layer="${layerKey}"`:''}><span class="k">${k}</span><span class="v">${v}</span></div>`;
+}
+function precinctUrl(n){
+  if (n===22) return 'https://www.nyc.gov/site/nypd/bureaus/patrol/precincts/central-park-precinct.page';
+  if (n===14) return 'https://www.nyc.gov/site/nypd/bureaus/patrol/precincts/midtown-south-precinct.page';
+  if (n===18) return 'https://www.nyc.gov/site/nypd/bureaus/patrol/precincts/midtown-north-precinct.page';
+  return `https://www.nyc.gov/site/nypd/bureaus/patrol/precincts/${ordinal(n)}-precinct.page`;
+}
+function schoolLinks(p){
+  // dbn like "20K503" or "19K938,19K159"; label like "938 (K-4), 159 (5)"
+  const dbns = (p.dbn||'').split(',');
+  const links = dbns.filter(Boolean).map(d => {
+    const code = d.trim().slice(2);
+    return `<a href="https://www.schools.nyc.gov/schools/${esc(code)}" target="_blank" rel="noopener">${esc(d.trim())}</a>`;
+  }).join(', ');
+  return `${links}<span class="meta">${esc(p.label)}</span>`;
+}
+
+/* ---------- live: PLUTO lot ---------- */
+const LANDUSE = {1:'One and two family buildings',2:'Multifamily walk-up',3:'Multifamily with elevator',4:'Mixed residential and commercial',5:'Commercial and office',6:'Industrial and manufacturing',7:'Transportation and utility',8:'Public facilities and institutions',9:'Open space and outdoor recreation',10:'Parking facilities',11:'Vacant land'};
+async function fetchLot(bbl, revDist){
+  const el = $('lotbody');
+  if (!bbl){ el.innerHTML = `<span class="note" style="margin:0">No tax lot found at this point (streets, parks and water are not lots).</span>`; return; }
+  try{
+    const r = await fetch(`https://data.cityofnewyork.us/resource/64uk-42ks.json?$select=address,zonedist1,zonedist2,overlay1,spdist1,bldgclass,landuse,ownername,yearbuilt,numfloors,unitsres,unitstotal,lotarea,bldgarea,assesstot,landmark,histdist,builtfar,residfar,commfar&bbl=${parseInt(bbl,10)}`);
+    const d = (await r.json())[0];
+    if (!d){ el.innerHTML = `<span class="note" style="margin:0">No property record found for this lot.</span>`; return; }
+    let h = '';
+    if (revDist!=null && revDist>40) h += `<div class="note" style="margin:0 0 8px">Showing the nearest lot, about ${Math.round(revDist)} meters away.</div>`;
+    const zoning = [d.zonedist1, d.zonedist2].filter(Boolean).join(' / ');
+    h += row('Zoning', `${esc(zoning)||'—'}${d.overlay1?`<span class="meta">Overlay ${esc(d.overlay1)}</span>`:''}${d.spdist1?`<span class="meta">Special district ${esc(d.spdist1)}</span>`:''}`);
+    if (d.landuse) h += row('Land use', esc(LANDUSE[+d.landuse]||d.landuse));
+    if (+d.yearbuilt) h += row('Year built', `${+d.yearbuilt}<span class="meta">PLUTO year built is approximate for older buildings</span>`);
+    if (+d.numfloors) h += row('Floors', (+d.numfloors).toLocaleString());
+    h += row('Units', `${fmt(d.unitstotal)}<span class="meta">${fmt(d.unitsres)} residential</span>`);
+    h += row('Lot / building area', `${fmt(d.lotarea)} / ${fmt(d.bldgarea)} sq ft`);
+    if (d.builtfar) h += row('Floor area ratio', `${(+d.builtfar).toFixed(2)} built<span class="meta">max residential ${d.residfar?(+d.residfar).toFixed(2):'—'} · commercial ${d.commfar?(+d.commfar).toFixed(2):'—'}</span>`);
+    if (d.assesstot) h += row('Assessed value', money(d.assesstot));
+    if (d.ownername) h += row('Owner of record', esc(d.ownername));
+    if (d.landmark) h += row('Landmark', esc(d.landmark));
+    h += `<div class="note">From the Department of City Planning's Primary Land Use Tax Lot Output (PLUTO) file, queried live.</div>`;
+    el.innerHTML = h;
+  }catch(e){ el.innerHTML = `<span class="errnote">Could not reach the live property feed.</span>`; }
+}
+
+/* ---------- live: 311 ---------- */
+function daysAgoISO(days){
+  const d = new Date(Date.now() - days*86400000);
+  return d.toISOString().slice(0,10) + 'T00:00:00';
+}
+async function fetch311(lat,lng){
+  const el = $('c311body');
+  try{
+    const where = encodeURIComponent(`within_circle(location, ${lat}, ${lng}, 250) AND created_date > '${daysAgoISO(90)}'`);
+    const r = await fetch(`https://data.cityofnewyork.us/resource/erm2-nwe9.json?$select=complaint_type,count(*) as n&$where=${where}&$group=complaint_type&$order=n DESC&$limit=50`);
+    const rows = await r.json();
+    const total = rows.reduce((s,x)=>s+ +x.n, 0);
+    let h = `<div class="row"><span class="k">311 complaints, last 90 days within 250 meters</span><span class="v bignum">${fmt(total)}</span></div>`;
+    if (rows.length) h += `<ul class="toplist">` + rows.slice(0,5).map(x=>`<li><span>${esc(x.complaint_type)}</span><span class="n">${fmt(x.n)}</span></li>`).join('') + `</ul>`;
+    el.innerHTML = h;
+  }catch(e){ el.innerHTML = `<span class="errnote">311 feed unavailable right now.</span>`; }
+}
+
+/* ---------- live: crime ---------- */
+async function fetchCrime(lat,lng){
+  const el = $('crimebody');
+  try{
+    const yr = new Date().getFullYear();
+    const where = encodeURIComponent(`within_circle(lat_lon, ${lat}, ${lng}, 500) AND rpt_dt >= '${yr}-01-01T00:00:00'`);
+    const r = await fetch(`https://data.cityofnewyork.us/resource/5uac-w243.json?$select=ofns_desc,count(*) as n&$where=${where}&$group=ofns_desc&$order=n DESC&$limit=50`);
+    const rows = await r.json();
+    const total = rows.reduce((s,x)=>s+ +x.n, 0);
+    let h = `<div class="row"><span class="k">Crime complaints reported to the New York Police Department in ${yr}, within 500 meters</span><span class="v bignum">${fmt(total)}</span></div>`;
+    if (rows.length) h += `<ul class="toplist">` + rows.slice(0,5).map(x=>`<li><span>${titleCaseOfns(x.ofns_desc)}</span><span class="n">${fmt(x.n)}</span></li>`).join('') + `</ul>`;
+    h += `<div class="note">Counted by the date the complaint was reported. A 500 meter circle crosses neighborhood lines and includes busy corridors; this is context, not a safety score.</div>`;
+    el.innerHTML = h;
+  }catch(e){ el.innerHTML = `<span class="errnote">Crime feed unavailable right now.</span>`; }
+}
+function titleCaseOfns(s){
+  if (!s) return '—';
+  return esc(s.toLowerCase().replace(/(^|\s|\/)\w/g, c=>c.toUpperCase()).replace(/ & Related Of(fenses)?$/i,''));
+}
+
+/* ---------- live: restaurants ---------- */
+async function fetchFood(lat,lng){
+  const el = $('foodbody');
+  try{
+    const where = encodeURIComponent(`within_circle(location, ${lat}, ${lng}, 200) AND grade IS NOT NULL AND inspection_date > '${daysAgoISO(365*2)}'`);
+    const r = await fetch(`https://data.cityofnewyork.us/resource/43nn-pn8j.json?$select=camis,dba,grade,max(inspection_date) as d&$where=${where}&$group=camis,dba,grade&$limit=400`);
+    const rows = await r.json();
+    // keep latest grade per restaurant
+    const latest = {};
+    rows.forEach(x => { if (!latest[x.camis] || x.d > latest[x.camis].d) latest[x.camis] = x; });
+    const vals = Object.values(latest);
+    if (!vals.length){ el.innerHTML = `<div class="row"><span class="k">Graded restaurants within 200 meters</span><span class="v bignum">0</span></div>`; return; }
+    const count = g => vals.filter(v=>v.grade===g).length;
+    el.innerHTML = `<div class="row"><span class="k">Restaurant inspection grades within 200 meters</span><span class="v bignum">${vals.length}</span></div>
+      <div class="grades">
+        <div class="g gA"><b>${count('A')}</b><span>grade A</span></div>
+        <div class="g gB"><b>${count('B')}</b><span>grade B</span></div>
+        <div class="g gC"><b>${count('C')}</b><span>grade C</span></div>
+        <div class="g"><b>${vals.length-count('A')-count('B')-count('C')}</b><span>pending / other</span></div>
+      </div>
+      <div class="note">Latest posted grade per restaurant, inspections from the last two years.</div>`;
+  }catch(e){ el.innerHTML = `<span class="errnote">Inspection feed unavailable right now.</span>`; }
+}
+
+/* ---------- subway ---------- */
+const LINECOLORS = {'1':'#EE352E','2':'#EE352E','3':'#EE352E','4':'#00933C','5':'#00933C','6':'#00933C','7':'#B933AD',
+ 'A':'#0039A6','C':'#0039A6','E':'#0039A6','B':'#FF6319','D':'#FF6319','F':'#FF6319','M':'#FF6319',
+ 'G':'#6CBE45','J':'#996633','Z':'#996633','L':'#A7A9AC','N':'#FCCC0A','Q':'#FCCC0A','R':'#FCCC0A','W':'#FCCC0A',
+ 'S':'#808183','SIR':'#0078C6'};
+function haversine(lat1,lon1,lat2,lon2){
+  const R=6371000, t=Math.PI/180;
+  const a = Math.sin((lat2-lat1)*t/2)**2 + Math.cos(lat1*t)*Math.cos(lat2*t)*Math.sin((lon2-lon1)*t/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+function renderSubway(lat,lng){
+  const el = $('subwaybody');
+  const st = DATA.subway.map(s => ({name:s[0], lines:s[1], d:haversine(lat,lng,s[2],s[3])}))
+    .sort((a,b)=>a.d-b.d).slice(0,3);
+  if (!st.length || st[0].d > 3200){ el.innerHTML = row('Nearest subway','More than 2 miles away'); return; }
+  el.innerHTML = `<div class="row"><span class="k">Nearest subway</span><span class="v"></span></div>
+    <ul class="toplist">` + st.map(s => {
+      const lines = s.lines.split(' ').map(l=>`<span class="subwayline" style="background:${LINECOLORS[l]||'#555'};${(LINECOLORS[l]==='#FCCC0A')?'color:#16213a':''}">${esc(l)}</span>`).join('');
+      const min = Math.max(1, Math.round(s.d/80));
+      return `<li><span>${esc(s.name)} ${lines}</span><span class="n">${min} min walk</span></li>`;
+    }).join('') + `</ul>`;
+}
+
+/* ---------- demographics ---------- */
+function demographicsBlock(nta, boro){
+  if (!nta) return '';
+  const code = nta.properties.nta2020;
+  const D = DATA.nta_demographics[code];
+  const CITY = DATA.compare_geos.NYC;
+  const isPark = nta.properties.ntatype && nta.properties.ntatype !== '0';
+  let h = `<section class="blk"><h3><span class="num">6</span> ${esc(nta.properties.ntaname)} in numbers</h3>`;
+  if (!D || !D.pop || isPark && D.pop < 200){
+    h += `<div class="note" style="margin:0">This area (a park, airport, cemetery or other special zone) has no meaningful residential profile.</div></section>`;
+    return h;
+  }
+  h += row('Population', fmt(D.pop));
+  if (D.median_age) h += row('Median age', D.median_age);
+  if (D.avg_hh_size) h += row('Average household size', D.avg_hh_size);
+  h += `<div style="height:10px"></div>
+  <div class="legendline"><span><span class="sw"></span>${esc(nta.properties.ntaname).length>24?'this neighborhood':esc(nta.properties.ntaname)}</span><span><span class="mk"></span>citywide</span></div>`;
+  h += cmpDollar('Median household income', D.median_hh_income, CITY.median_hh_income, 160000);
+  h += cmpDollar('Median gross rent', D.median_rent, CITY.median_rent, 3500);
+  h += cmpPct('Foreign born', D.foreign_born_pct, CITY.foreign_born_pct);
+  h += cmpPct('Below poverty line', D.poverty_pct, CITY.poverty_pct);
+  h += cmpPct("Bachelor's degree or higher", D.bachelors_plus_pct, CITY.bachelors_plus_pct);
+  h += cmpPct('Limited English', D.limited_english_pct, CITY.limited_english_pct);
+  h += cmpPct('Renters', D.renter_occ_pct, CITY.renter_occ_pct);
+  h += cmpPct('Rent burdened (30%+ of income)', D.rent_burdened_pct, CITY.rent_burdened_pct);
+
+  // race/ethnicity composition
+  const seg = [['Hispanic', D.hispanic_pct, '#e0762f'], ['White', D.white_nh_pct, '#5b79b8'], ['Black', D.black_nh_pct, '#3f9b76'], ['Asian', D.asian_nh_pct, '#c9542c'.replace('c9542c','b6539f')], ['Other / two+', null, '#a7a298']];
+  const known = seg.slice(0,4).reduce((s,x)=>s+(+x[1]||0),0);
+  seg[4][1] = Math.max(0, 100-known);
+  h += `<div style="margin-top:12px"><div class="cmp"><div class="lab"><span>Race and ethnicity</span></div></div>
+    <div class="racebar">` + seg.map(s=>`<div style="width:${(+s[1]||0)}%;background:${s[2]}" title="${s[0]} ${pct(s[1])}"></div>`).join('') + `</div>
+    <div class="racekey">` + seg.map(s=>`<span><i style="background:${s[2]}"></i>${s[0]} ${pct(s[1])}</span>`).join('') + `</div></div>`;
+  if (D.mean_commute) h += row('Mean commute', `${D.mean_commute} minutes`);
+  h += `<div class="note">American Community Survey 2016-2020 five year estimates for neighborhood tabulation area ${esc(code)}. Small-area survey numbers carry real margins of error; treat differences of a few points as noise.</div></section>`;
+  return h;
+}
+function cmpPct(label, v, cityv){
+  if (v==null) return '';
+  return `<div class="cmp"><div class="lab"><span>${label}</span><b>${pct(v)}</b></div>
+    <div class="track"><div class="fill" style="width:${Math.min(100,v)}%"></div>
+    <div class="citymark" style="left:${Math.min(100,cityv)}%" title="citywide ${pct(cityv)}"></div></div></div>`;
+}
+function cmpDollar(label, v, cityv, scale){
+  if (v==null) return '';
+  return `<div class="cmp"><div class="lab"><span>${label}</span><b>${money(v)}</b></div>
+    <div class="track"><div class="fill" style="width:${Math.min(100,v/scale*100)}%"></div>
+    <div class="citymark" style="left:${Math.min(100,cityv/scale*100)}%" title="citywide ${money(cityv)}"></div></div></div>`;
+}
+
+/* ---------- chrome ---------- */
+$('closepanel').addEventListener('click', () => { $('panel').classList.remove('open'); clearShape(); });
+$('aicaution').addEventListener('click', () => $('aipop').classList.toggle('show'));
+document.addEventListener('click', e => {
+  if (!$('aipop').contains(e.target) && e.target !== $('aicaution')) $('aipop').classList.remove('show');
+});
+
+/* deep link */
+if (location.hash){
+  const m = location.hash.slice(1).split(',').map(Number);
+  if (m.length===2 && isFinite(m[0]) && isFinite(m[1])) ready.then(()=>inspect(m[0], m[1]));
+}
+</script>
+</body>
+</html>
