@@ -760,6 +760,41 @@ function city311Total(since){
   return _city311;
 }
 
+/* CompStat weekly data via the scraper feeding compstat-ledger.vercel.app */
+let _compstat = null;
+function compstatData(){
+  if (!_compstat) _compstat = fetch('https://raw.githubusercontent.com/joshgreenman1973/nypd-compstat-scraper/main/data/latest_compstat.json')
+    .then(r => { if(!r.ok) throw new Error(r.status); return r.json(); }).catch(()=>null);
+  return _compstat;
+}
+function signedPct(v){
+  if (v==null || !isFinite(v)) return '—';
+  const r = Math.round(v);
+  return (r>0?'+':'') + r + '%';
+}
+function pctColor(v){ return v>0 ? 'color:#b3382c' : v<0 ? 'color:#1f7a4d' : ''; }
+function compstatBlock(cs, pctNum){
+  const key = pctNum===22 ? 'Central Park Precinct' : `${ordinal(pctNum)} Precinct`;
+  const p = cs?.[key];
+  if (!p) return '';
+  const t = p.total_seven_major, ytd = t.year_to_date, m28 = t.twenty_eight_day, hist = t.historical||{};
+  const CRIMES = [['Murder','Murder'],['Rape','Rape'],['Robbery','Robbery'],['Fel. Assault','Felony assault'],['Burglary','Burglary'],['Gr. Larceny','Grand larceny'],['G.L.A.','Auto theft']];
+  let h = `<div class="row"><span class="k">Seven major felonies in the ${key === 'Central Park Precinct' ? key : esc(key.toLowerCase().replace(' precinct',' Precinct'))}, year to date through ${esc(p.report_period?.week_end||'')}</span><span class="v bignum">${fmt(ytd.current_year)}</span></div>
+    <div class="statpair">
+      <div class="g"><b style="${pctColor(ytd.pct_change)}">${signedPct(ytd.pct_change)}</b><span>vs. last year to date (${fmt(ytd.prior_year)})</span></div>
+      <div class="g"><b style="${pctColor(m28.pct_change)}">${signedPct(m28.pct_change)}</b><span>last 28 days vs. a year earlier</span></div>
+      <div class="g"><b style="${pctColor(hist['31_yr_pct'])}">${signedPct(hist['31_yr_pct'])}</b><span>vs. 31 years ago (1990s baseline)</span></div>
+    </div>
+    <ul class="toplist">`+CRIMES.map(([k,label])=>{
+      const c = p.seven_major_felonies?.[k]?.year_to_date;
+      if (!c) return '';
+      return `<li><span>${label}</span><span class="n">${fmt(c.current_year)} <span style="font-weight:400;${pctColor(c.pct_change)}">${signedPct(c.pct_change)}</span></span></li>`;
+    }).join('')+`</ul>
+    <div class="note" style="margin-top:6px">Precinct-wide weekly CompStat figures (major felonies only), fresher than the complaint feed below. Year-to-date counts with change vs. the same dates last year. <a href="https://compstat-ledger.vercel.app/" target="_blank" rel="noopener">Three decades of CompStat, charted →</a></div>
+    <div class="subhead" style="margin-top:14px">All complaints, right around this point</div>`;
+  return h;
+}
+
 /* crime context: shared citywide baselines, fetched once per session */
 const CITY_LAND_SQMI = 302.1;
 const crimeCache = {};
@@ -817,11 +852,12 @@ async function fetchCrime(ctx){
   const lastStart = (+base.start.slice(0,4)-1) + base.start.slice(4);
   const lastEnd = (+base.end.slice(0,4)-1) + base.end.slice(4);
   const sparkStart = new Date(new Date(base.end) - 380*86400000).toISOString().slice(0,10);
-  const [rows, lastYear, sparkOld, sparkNew] = await Promise.all([
+  const [rows, lastYear, sparkOld, sparkNew, cs] = await Promise.all([
     soda('5uac-w243', {'$select':'ofns_desc,law_cat_cd,count(*) as n','$where':wNow,'$group':'ofns_desc,law_cat_cd','$order':'n DESC','$limit':80}),
     soda('qgea-i56i', {'$select':'count(*) as n','$where':`${wNow} AND rpt_dt between '${lastStart}T00:00:00' and '${lastEnd}T23:59:59'`}),
     soda('qgea-i56i', {'$select':'date_trunc_ym(rpt_dt) as m,count(*) as n','$where':`${wNow} AND rpt_dt >= '${sparkStart}T00:00:00'`,'$group':'m'}),
     soda('5uac-w243', {'$select':'date_trunc_ym(rpt_dt) as m,count(*) as n','$where':wNow,'$group':'m'}),
+    compstatData(),
   ]);
   if (stale(ctx)||!$('crime')) return;
   const total = rows.reduce((s,x)=>s+ +x.n,0);
@@ -853,7 +889,8 @@ async function fetchCrime(ctx){
     <div style="display:flex;justify-content:space-between;font-size:10px;color:#8a8f9e"><span>${keys[0]}</span><span>monthly complaints</span><span>${keys[keys.length-1]}</span></div>` : '';
   const pc = n => n==null?'—':fmt(Math.round(n));
   const delta = prev > 0 ? (total-prev)/prev*100 : null;
-  let h = `<div class="row"><span class="k">Crime complaints within 500 meters, ${fmtWindow(base.start, base.end)}</span><span class="v bignum">${fmt(total)}</span></div>
+  let h = ctx.precinct ? compstatBlock(cs, ctx.precinct) : '';
+  h += `<div class="row"><span class="k">Crime complaints within 500 meters, ${fmtWindow(base.start, base.end)}</span><span class="v bignum">${fmt(total)}</span></div>
     <div class="statpair">
       <div class="g"><b>${mult!=null ? mult.toFixed(1)+'×' : '—'}</b><span>the citywide average for an area this size (${pc(expected)})</span></div>
       <div class="g"><b style="${delta!=null&&delta>0?'color:#b3382c':delta!=null&&delta<0?'color:#1f7a4d':''}">${delta==null?'—':(delta>0?'+':'')+delta.toFixed(0)+'%'}</b><span>vs. the same dates last year (${fmt(prev)})</span></div>
