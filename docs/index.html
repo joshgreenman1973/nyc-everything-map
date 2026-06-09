@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Everything Map — New York City</title>
-<meta name="description" content="Pick any point in the five boroughs and learn everything about it: neighborhood, representatives, precinct, schools, zoning, demographics and live city data.">
+<meta name="description" content="Pick any point in the five boroughs and learn everything about it: neighborhood, representatives, schools, zoning, landmarks, demographics and live city data.">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -22,7 +22,7 @@ body{font-family:'Archivo',sans-serif; color:var(--ink); background:var(--paper)
 .leaflet-container{font:inherit}
 
 /* ---------- landing hero ---------- */
-#hero{position:absolute; z-index:1000; left:50%; top:14%; transform:translateX(-50%);
+#hero{position:absolute; z-index:1000; left:50%; top:12%; transform:translateX(-50%);
   width:min(620px, calc(100vw - 32px)); text-align:center; pointer-events:none; transition:opacity .45s, transform .45s}
 #hero.hidden{opacity:0; transform:translateX(-50%) translateY(-24px); pointer-events:none !important}
 #hero .card{pointer-events:auto; background:var(--white); border:2px solid var(--ink); border-radius:14px;
@@ -38,7 +38,6 @@ body{font-family:'Archivo',sans-serif; color:var(--ink); background:var(--paper)
 /* ---------- search ---------- */
 .searchwrap{position:relative; pointer-events:auto}
 #searchbox{display:flex; align-items:center; background:var(--white); border:2px solid var(--ink); border-radius:10px; overflow:hidden}
-#hero #searchbox{border-width:2px}
 #searchbox svg{flex:none; margin:0 4px 0 14px}
 #search{flex:1; min-width:0; border:0; outline:0; background:transparent; padding:14px 8px 14px 6px; font:500 16px 'Archivo'; color:var(--ink)}
 #search::placeholder{color:#9aa0b0}
@@ -51,7 +50,6 @@ body{font-family:'Archivo',sans-serif; color:var(--ink); background:var(--paper)
 #suggest div:hover,#suggest div.active{background:#fdf4dc}
 #suggest .muted{color:#8a8f9e; font-size:12px}
 
-/* compact search pill once panel is open */
 #topsearch{position:absolute; z-index:1001; top:14px; left:calc((100vw + 430px)/2); transform:translateX(-50%);
   width:min(440px, calc(100vw - 480px)); display:none}
 #topsearch #searchbox2{display:flex; align-items:center; background:var(--white); border:2px solid var(--ink); border-radius:999px; box-shadow:0 4px 18px rgba(22,33,58,.22); overflow:hidden}
@@ -62,7 +60,6 @@ body{font-family:'Archivo',sans-serif; color:var(--ink); background:var(--paper)
 #topsearch #suggest2 div{padding:10px 14px; font-size:13px; cursor:pointer; border-bottom:1px solid var(--paper-deep)}
 #topsearch #suggest2 div:hover,#topsearch #suggest2 div.active{background:#fdf4dc}
 
-/* ---------- loading chip ---------- */
 #loadchip{position:absolute; z-index:1100; bottom:18px; left:50%; transform:translateX(-50%);
   background:var(--navy); color:#fff; font:600 12px 'Archivo'; padding:8px 16px; border-radius:999px;
   box-shadow:var(--shadow); display:flex; gap:10px; align-items:center; transition:opacity .4s}
@@ -82,14 +79,14 @@ body{font-family:'Archivo',sans-serif; color:var(--ink); background:var(--paper)
 .phead{background:var(--navy); color:var(--white); padding:26px 26px 20px; position:relative; overflow:hidden}
 .phead::after{content:""; position:absolute; inset:auto 0 0 0; height:6px;
   background:repeating-linear-gradient(90deg,var(--gold) 0 18px, var(--navy) 18px 26px)}
-.phead .kicker{font:700 11px 'Archivo'; letter-spacing:.16em; text-transform:uppercase; color:var(--gold); display:flex; gap:8px; align-items:center}
+.phead .kicker{font:700 11px 'Archivo'; letter-spacing:.16em; text-transform:uppercase; color:var(--gold)}
 .phead h2{font-family:'Fraunces',serif; font-weight:900; font-size:25px; line-height:1.08; margin:8px 0 4px; letter-spacing:-.01em}
 .phead .sub{color:#c6cde0; font-size:13px; line-height:1.45}
 .phead .nearnote{color:#9aa3c0; font-size:11.5px; margin-top:6px; font-style:italic}
-.phead .actions{margin-top:12px; display:flex; gap:8px}
-.phead .actions button{font:600 11px 'Archivo'; padding:5px 12px; border-radius:999px; cursor:pointer;
-  border:1.5px solid rgba(255,255,255,.35); background:transparent; color:#dfe4f2}
-.phead .actions button:hover{border-color:var(--gold); color:var(--gold)}
+.phead .actions{margin-top:12px; display:flex; gap:8px; flex-wrap:wrap}
+.phead .actions button,.phead .actions a{font:600 11px 'Archivo'; padding:5px 12px; border-radius:999px; cursor:pointer;
+  border:1.5px solid rgba(255,255,255,.35); background:transparent; color:#dfe4f2; text-decoration:none}
+.phead .actions button:hover,.phead .actions a:hover{border-color:var(--gold); color:var(--gold)}
 
 section.blk{border-bottom:1px solid var(--line); padding:18px 26px 20px}
 section.blk:last-of-type{border-bottom:0}
@@ -102,7 +99,7 @@ section.blk:last-of-type{border-bottom:0}
 .row.hl{cursor:pointer; transition:background .12s}
 .row.hl:hover{background:#f3e9c8}
 .row.hl:hover .k::after{content:" ⬡"; color:var(--gold-deep)}
-.row a{color:inherit; text-decoration:underline; text-decoration-color:var(--gold-deep); text-underline-offset:2px}
+.row a, ul.toplist a{color:inherit; text-decoration:underline; text-decoration-color:var(--gold-deep); text-underline-offset:2px}
 .bignum{font-family:'Fraunces',serif; font-weight:900; font-size:26px; line-height:1}
 .badge{display:inline-block; font:700 11px 'Archivo'; padding:3px 10px; border-radius:999px; border:1.5px solid currentColor}
 .badge.zone1,.badge.zone2{color:var(--red)} .badge.zone3,.badge.zone4{color:#b06a00} .badge.zone5,.badge.zone6{color:var(--green)}
@@ -111,18 +108,23 @@ section.blk:last-of-type{border-bottom:0}
 .party{font-size:11px; font-weight:700; border-radius:3px; padding:1px 5px; margin-left:6px; vertical-align:1px}
 .party.D{background:#dbe7ff; color:#1d4ed8} .party.R{background:#ffe0db; color:#b3382c} .party.O{background:#eee; color:#555}
 .note{font-size:11.5px; color:#8a8f9e; line-height:1.5; margin-top:10px}
+.note a{color:#6a7186}
 .spin{display:inline-block; width:13px; height:13px; border:2px solid var(--line); border-top-color:var(--gold-deep); border-radius:50%; animation:rot .7s linear infinite; vertical-align:-2px}
 @keyframes rot{to{transform:rotate(360deg)}}
 .errnote{font-size:12.5px; color:var(--red)}
+.morelinks{display:flex; flex-wrap:wrap; gap:7px; margin-top:11px}
+.morelinks a{font:600 11.5px 'Archivo'; padding:5px 11px; border-radius:999px; border:1.5px solid var(--line);
+  background:var(--white); color:var(--ink-soft); text-decoration:none}
+.morelinks a:hover{border-color:var(--gold-deep); color:var(--ink); background:#fdf4dc}
+.morelinks a::after{content:" ↗"; font-size:10px; color:var(--gold-deep)}
 
-/* demographic compare bars */
+/* compare bars */
 .cmp{margin:4px 0 10px}
 .cmp .lab{display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:3px}
 .cmp .lab b{font-weight:700}
 .cmp .track{position:relative; height:12px; background:var(--paper-deep); border-radius:6px; border:1px solid var(--line)}
 .cmp .fill{position:absolute; left:0; top:0; bottom:0; background:var(--gold); border-radius:6px 0 0 6px; min-width:2px}
 .cmp .citymark{position:absolute; top:-3px; bottom:-3px; width:2.5px; background:var(--navy)}
-.cmp .cityval{font-size:10.5px; color:#8a8f9e}
 .legendline{display:flex; gap:14px; align-items:center; font-size:10.5px; color:#8a8f9e; margin-bottom:10px}
 .legendline .sw{display:inline-block; width:14px; height:8px; background:var(--gold); border-radius:3px; margin-right:4px; vertical-align:-1px}
 .legendline .mk{display:inline-block; width:2.5px; height:11px; background:var(--navy); margin-right:5px; vertical-align:-2px}
@@ -131,22 +133,26 @@ section.blk:last-of-type{border-bottom:0}
 .racekey{display:flex; flex-wrap:wrap; gap:4px 12px; font-size:11px; color:var(--ink-soft); margin-bottom:6px}
 .racekey i{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:4px}
 
-/* live lists */
 ul.toplist{list-style:none; margin-top:2px}
 ul.toplist li{display:flex; justify-content:space-between; gap:10px; font-size:13.5px; padding:5px 0; border-bottom:1px dashed var(--line)}
 ul.toplist li:last-child{border-bottom:0}
-ul.toplist .n{font-weight:700; font-variant-numeric:tabular-nums}
+ul.toplist .n{font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap}
+ul.toplist .sub{display:block; font-size:11.5px; color:#8a8f9e; font-weight:400}
 .subwayline{display:inline-block; width:19px; height:19px; border-radius:50%; color:#fff; font:700 11px/19px 'Archivo'; text-align:center; margin-left:3px; vertical-align:-4px}
 .grades{display:flex; gap:8px; margin-top:4px}
 .grades .g{flex:1; text-align:center; border:1.5px solid var(--line); border-radius:9px; padding:8px 4px; background:var(--white)}
 .grades .g b{font-family:'Fraunces',serif; font-size:21px; display:block}
 .grades .gA b{color:var(--green)} .grades .gB b{color:#b06a00} .grades .gC b{color:var(--red)}
 .grades .g span{font-size:10.5px; color:#8a8f9e}
+.statpair{display:flex; gap:8px; margin:4px 0 8px}
+.statpair .g{flex:1; text-align:center; border:1.5px solid var(--line); border-radius:9px; padding:9px 4px; background:var(--white)}
+.statpair .g b{font-family:'Fraunces',serif; font-size:20px; display:block}
+.statpair .g span{font-size:10.5px; color:#8a8f9e; line-height:1.3; display:block}
+.subhead{font:700 11px 'Archivo'; letter-spacing:.1em; text-transform:uppercase; color:#8a8f9e; margin:16px 0 4px}
 
 .pfoot{padding:16px 26px 22px; background:var(--paper-deep); border-top:1.5px solid var(--line); font-size:11.5px; color:var(--ink-soft); line-height:1.55}
 .pfoot a{color:var(--ink); font-weight:600}
 
-/* attribution + utility buttons */
 #aicaution{position:absolute; z-index:1003; bottom:16px; left:16px; background:var(--maroon); color:#fff;
   border:0; border-radius:999px; font:700 12px 'Archivo'; padding:9px 16px; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.25)}
 #aicaution:hover{filter:brightness(1.15)}
@@ -155,8 +161,6 @@ ul.toplist .n{font-weight:700; font-variant-numeric:tabular-nums}
   font-size:12.5px; line-height:1.55; display:none}
 #aipop.show{display:block}
 #aipop h4{font-family:'Fraunces',serif; font-size:16px; color:var(--gold); margin-bottom:8px}
-#aipop ul{margin:6px 0 8px 16px}
-#aipop li{margin-bottom:4px}
 #aipop a{color:var(--gold)}
 #methlink{position:absolute; z-index:1003; bottom:16px; right:16px; background:var(--white); border:2px solid var(--ink);
   color:var(--ink); border-radius:999px; font:700 12px 'Archivo'; padding:8px 15px; text-decoration:none; box-shadow:0 4px 14px rgba(22,33,58,.18)}
@@ -166,7 +170,7 @@ ul.toplist .n{font-weight:700; font-variant-numeric:tabular-nums}
   #panel{top:auto; height:72vh; width:100vw; border-right:0; border-top:2px solid var(--ink);
     border-radius:18px 18px 0 0; transform:translateY(110%)}
   #panel.open{transform:none}
-  #hero{top:9%}
+  #hero{top:8%}
   #methlink{bottom:auto; top:14px; right:12px}
   #aicaution{bottom:auto; top:14px; left:12px; padding:8px 12px}
   #aipop{bottom:auto; top:60px; left:12px}
@@ -180,7 +184,7 @@ ul.toplist .n{font-weight:700; font-variant-numeric:tabular-nums}
 <div id="hero">
   <div class="card">
     <h1>The <span class="gold">everything</span> map</h1>
-    <p class="sub">Pick any point in the five boroughs of New York City — an address, a corner, a park bench — and learn what district it sits in, who represents it, how the neighborhood lives and what the city's data says about the block.</p>
+    <p class="sub">Pick any point in the five boroughs of New York City — an address, a corner, a park bench — and learn what district it sits in, who represents it, what's nearby, what's changing and how the neighborhood lives.</p>
     <div class="searchwrap">
       <div id="searchbox">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#16213a" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -219,77 +223,55 @@ ul.toplist .n{font-weight:700; font-variant-numeric:tabular-nums}
 <button id="aicaution">⚠ AI caution</button>
 <div id="aipop">
   <h4>Read this before you rely on the map</h4>
-  This site was built with AI assistance. Quality checks that were done: boundary lookups were validated against 900 New York Police Department records (99.8% agreement net of records the department itself labels differently) and 880 311 records; every elected official was checked against an official or maintained public source in June 2026; demographic figures were spot-checked against published American Community Survey tables. Quality checks that were <b>not</b> done: not every one of the thousands of possible lookups has been human-reviewed, live feeds (311, crime, property data) are shown as the city publishes them and zoned school assignments can change year to year. Verify anything consequential with the agency itself. <a href="methodology.html">Full methodology</a>.
+  This site was built with AI assistance. Quality checks that were done: boundary lookups were validated against 900 New York Police Department records and 880 311 records (99.8%+ agreement net of records the city itself labels differently); every elected official was checked against an official or maintained public source in June 2026; demographic figures were spot-checked against published American Community Survey tables. Quality checks that were <b>not</b> done: not every possible lookup has been human-reviewed, live feeds are shown as the city publishes them, school data carries the vintages noted in each section and zoned school assignments change. Verify anything consequential with the agency itself. <a href="methodology.html">Full methodology</a>.
 </div>
 <a id="methlink" href="methodology.html">Methodology</a>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 /* ============================== setup ============================== */
-const map = L.map('map', {zoomControl:false, attributionControl:true})
-  .setView([40.7128,-73.9560], 11);
+const NYC_BOUNDS = [[40.49,-74.27],[40.92,-73.68]];
+const map = L.map('map', {zoomControl:false, attributionControl:true, zoomSnap:0.25});
+map.fitBounds(NYC_BOUNDS, {padding:[6,6]});
 L.control.zoom({position:'bottomright'}).addTo(map);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
   attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
   maxZoom:19}).addTo(map);
+// dim everything outside the five boroughs
+fetch('data/cityoutline.json').then(r=>r.json()).then(gj => {
+  const world = [[[-180,-85],[180,-85],[180,85],[-180,85],[-180,-85]]];
+  const holes = [];
+  gj.features.forEach(f => {
+    const g = f.geometry;
+    (g.type==='Polygon' ? [g.coordinates] : g.coordinates).forEach(poly => holes.push(poly[0]));
+  });
+  L.geoJSON({type:'Feature', geometry:{type:'Polygon', coordinates:[...world, ...holes]}},
+    {style:{stroke:false, fillColor:'#9aa0ae', fillOpacity:.28, interactive:false}, interactive:false}).addTo(map);
+  L.geoJSON(gj, {style:{color:'#16213a', weight:1.2, opacity:.5, fill:false, interactive:false}, interactive:false}).addTo(map);
+});
 
 const $ = id => document.getElementById(id);
-const LAYERS = {};
-const DATA = {};
+const LAYERS = {}, DATA = {};
 const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic'];
-const DATA_FILES = ['officials','nta_demographics','compare_geos','subway'];
+const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi'];
 let loaded = 0, totalFiles = LAYER_FILES.length + DATA_FILES.length;
-
 function tick(){
   loaded++;
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
-  if (loaded >= totalFiles){ $('loadchip').classList.add('done'); }
+  if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
 const ready = Promise.all([
   ...LAYER_FILES.map(f => fetch(`data/${f}.json`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
   ...DATA_FILES.map(f => fetch(`data/${f}.json`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
 ]).catch(e => { $('loadmsg').textContent = 'Some data failed to load — try refreshing.'; console.error(e); });
 
-/* ---------- point-in-polygon with bbox index ---------- */
-function ringContains(ring, x, y){
-  let inside = false;
-  for (let i=0, j=ring.length-1; i<ring.length; j=i++){
-    const xi=ring[i][0], yi=ring[i][1], xj=ring[j][0], yj=ring[j][1];
-    if (((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) inside = !inside;
-  }
-  return inside;
-}
-function polyContains(coords, x, y){ // GeoJSON Polygon coords
-  if (!ringContains(coords[0], x, y)) return false;
-  for (let k=1;k<coords.length;k++) if (ringContains(coords[k],x,y)) return false;
-  return true;
-}
-function featContains(f, x, y){
-  const g = f.geometry;
-  if (!g) return false;
-  if (g.type === 'Polygon') return polyContains(g.coordinates, x, y);
-  if (g.type === 'MultiPolygon') return g.coordinates.some(p => polyContains(p, x, y));
-  return false;
-}
-function bboxOf(g){
-  let minx=180,miny=90,maxx=-180,maxy=-90;
-  const scan = ring => ring.forEach(([x,y])=>{ if(x<minx)minx=x; if(x>maxx)maxx=x; if(y<miny)miny=y; if(y>maxy)maxy=y; });
-  (g.type==='Polygon'?[g.coordinates]:g.coordinates).forEach(p=>p.forEach(scan));
-  return [minx,miny,maxx,maxy];
-}
-function indexLayer(geojson){
-  geojson.features.forEach(f => f._bb = bboxOf(f.geometry));
-  return geojson;
-}
-function lookup(layer, lat, lng){
-  if (!layer) return null;
-  for (const f of layer.features){
-    const b = f._bb;
-    if (lng<b[0]||lng>b[2]||lat<b[1]||lat>b[3]) continue;
-    if (featContains(f, lng, lat)) return f;
-  }
-  return null;
-}
+/* ---------- point-in-polygon ---------- */
+function ringContains(ring,x,y){let inside=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))inside=!inside;}return inside;}
+function polyContains(c,x,y){if(!ringContains(c[0],x,y))return false;for(let k=1;k<c.length;k++)if(ringContains(c[k],x,y))return false;return true;}
+function featContains(f,x,y){const g=f.geometry;if(!g)return false;if(g.type==='Polygon')return polyContains(g.coordinates,x,y);if(g.type==='MultiPolygon')return g.coordinates.some(p=>polyContains(p,x,y));return false;}
+function bboxOf(g){let a=180,b=90,c=-180,d=-90;const s=r=>r.forEach(([x,y])=>{if(x<a)a=x;if(x>c)c=x;if(y<b)b=y;if(y>d)d=y;});(g.type==='Polygon'?[g.coordinates]:g.coordinates).forEach(p=>p.forEach(s));return[a,b,c,d];}
+function indexLayer(gj){gj.features.forEach(f=>f._bb=bboxOf(f.geometry));return gj;}
+function lookup(layer,lat,lng){if(!layer)return null;for(const f of layer.features){const b=f._bb;if(lng<b[0]||lng>b[2]||lat<b[1]||lat>b[3])continue;if(featContains(f,lng,lat))return f;}return null;}
 
 /* ---------- geocoding ---------- */
 const GEO = 'https://geosearch.planninglabs.nyc/v2';
@@ -297,14 +279,19 @@ async function geocode(text){
   const r = await fetch(`${GEO}/autocomplete?text=${encodeURIComponent(text)}&size=6`);
   return (await r.json()).features || [];
 }
-async function reverse(lat,lng){
+async function reverse(lat,lng,attempt=0){
   try{
     const r = await fetch(`${GEO}/reverse?point.lat=${lat}&point.lon=${lng}&size=1`);
-    return (await r.json()).features?.[0] || null;
-  }catch(e){ return null; }
+    if (!r.ok) throw new Error(r.status);
+    const f = (await r.json()).features?.[0] || null;
+    return {f, failed:false};
+  }catch(e){
+    if (attempt < 2){ await new Promise(res=>setTimeout(res, 900*(attempt+1))); return reverse(lat,lng,attempt+1); }
+    return {f:null, failed:true};
+  }
 }
 
-/* ---------- search UI (two instances) ---------- */
+/* ---------- search UI ---------- */
 function wireSearch(inputEl, listEl){
   let items = [], active = -1, t;
   inputEl.addEventListener('input', () => {
@@ -325,7 +312,7 @@ function wireSearch(inputEl, listEl){
   });
   inputEl.addEventListener('keydown', e => {
     const divs = listEl.querySelectorAll('div[data-i]');
-    if (e.key==='ArrowDown'){ active=Math.min(active+1, divs.length-1); paint(); e.preventDefault(); }
+    if (e.key==='ArrowDown'){ active=Math.min(active+1,divs.length-1); paint(); e.preventDefault(); }
     else if (e.key==='ArrowUp'){ active=Math.max(active-1,0); paint(); e.preventDefault(); }
     else if (e.key==='Enter'){
       if (active>=0 && items[active]) pick(items[active]);
@@ -338,8 +325,7 @@ function wireSearch(inputEl, listEl){
   function pick(f){
     listEl.style.display='none';
     inputEl.value = f.properties.label.replace(', New York, NY, USA','');
-    const [lng,lat] = f.geometry.coordinates;
-    inspect(lat, lng, f);
+    inspect(f.geometry.coordinates[1], f.geometry.coordinates[0], f);
   }
 }
 wireSearch($('search'), $('suggest'));
@@ -357,7 +343,7 @@ $('locbtn').addEventListener('click', locate);
 $('locbtn2').addEventListener('click', locate);
 
 /* ---------- map interactions ---------- */
-let pin = null, hoverShape = null;
+let pin = null, hoverShape = null, poiLayer = null;
 map.on('click', e => inspect(e.latlng.lat, e.latlng.lng));
 function dropPin(lat,lng){
   if (pin) map.removeLayer(pin);
@@ -370,9 +356,15 @@ function showShape(feature){
   if (!feature) return;
   hoverShape = L.geoJSON(feature, {style:{color:'#16213a', weight:2.5, fillColor:'#f2b418', fillOpacity:.22, dashArray:'2 6'}}).addTo(map);
 }
-function clearShape(){ if (hoverShape){ map.removeLayer(hoverShape); hoverShape = null; } }
+function clearShape(){ if (hoverShape){ map.removeLayer(hoverShape); hoverShape=null; } }
+function showPoi(lat,lng,label){
+  clearPoi();
+  poiLayer = L.circleMarker([lat,lng],{radius:9,color:'#16213a',weight:2,fillColor:'#b6539f',fillOpacity:.85})
+    .addTo(map).bindTooltip(label,{permanent:true,direction:'top',offset:[0,-10]}).openTooltip();
+}
+function clearPoi(){ if (poiLayer){ map.removeLayer(poiLayer); poiLayer=null; } }
 
-/* ============================== inspect ============================== */
+/* ============================== helpers ============================== */
 const fmt = n => n==null ? '—' : (+n).toLocaleString('en-US');
 const money = n => n==null ? '—' : '$' + (+n).toLocaleString('en-US');
 const pct = n => n==null ? '—' : (+n).toFixed(1) + '%';
@@ -380,86 +372,109 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;
 function partyTag(p){
   if (!p) return '';
   const k = /^dem/i.test(p) ? 'D' : /^rep/i.test(p) ? 'R' : 'O';
-  const letter = k==='O' ? esc(p[0]) : k;
-  return `<span class="party ${k}">${letter}</span>`;
+  return `<span class="party ${k}">${k==='O'?esc(p[0]):k}</span>`;
 }
 const ordinal = n => { n=+n; const s=['th','st','nd','rd'], v=n%100; return n+(s[(v-20)%10]||s[v]||s[0]); };
+function haversine(lat1,lon1,lat2,lon2){
+  const R=6371000,t=Math.PI/180;
+  const a=Math.sin((lat2-lat1)*t/2)**2+Math.cos(lat1*t)*Math.cos(lat2*t)*Math.sin((lon2-lon1)*t/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+function walkmin(m){ return Math.max(1, Math.round(m/80)); }
+function daysAgoISO(days){ return new Date(Date.now()-days*86400000).toISOString().slice(0,10)+'T00:00:00'; }
+function row(k,v,layerKey=null){
+  return `<div class="row${layerKey?' hl':''}"${layerKey?` data-layer="${layerKey}"`:''}><span class="k">${k}</span><span class="v">${v}</span></div>`;
+}
+function soda(dataset, params){
+  const u = new URL(`https://data.cityofnewyork.us/resource/${dataset}.json`);
+  Object.entries(params).forEach(([k,v]) => u.searchParams.set(k,v));
+  return fetch(u).then(r => { if(!r.ok) throw new Error(r.status); return r.json(); });
+}
+function precinctUrl(n){
+  if (n===22) return 'https://www.nyc.gov/site/nypd/bureaus/patrol/precincts/central-park-precinct.page';
+  if (n===14) return 'https://www.nyc.gov/site/nypd/bureaus/patrol/precincts/midtown-south-precinct.page';
+  if (n===18) return 'https://www.nyc.gov/site/nypd/bureaus/patrol/precincts/midtown-north-precinct.page';
+  return `https://www.nyc.gov/site/nypd/bureaus/patrol/precincts/${ordinal(n)}-precinct.page`;
+}
+function schoolLinks(p){
+  const dbns = (p.dbn||'').split(',');
+  const links = dbns.filter(Boolean).map(d => {
+    const code = d.trim().slice(2);
+    return `<a href="https://www.schools.nyc.gov/schools/${esc(code)}" target="_blank" rel="noopener">${esc(d.trim())}</a>`;
+  }).join(', ');
+  return `${links}<span class="meta">${esc(p.label)}</span>`;
+}
+const LANDUSE = {1:'One and two family buildings',2:'Multifamily walk-up',3:'Multifamily with elevator',4:'Mixed residential and commercial',5:'Commercial and office',6:'Industrial and manufacturing',7:'Transportation and utility',8:'Public facilities and institutions',9:'Open space and outdoor recreation',10:'Parking facilities',11:'Vacant land'};
+const LINECOLORS = {'1':'#EE352E','2':'#EE352E','3':'#EE352E','4':'#00933C','5':'#00933C','6':'#00933C','7':'#B933AD','A':'#0039A6','C':'#0039A6','E':'#0039A6','B':'#FF6319','D':'#FF6319','F':'#FF6319','M':'#FF6319','G':'#6CBE45','J':'#996633','Z':'#996633','L':'#A7A9AC','N':'#FCCC0A','Q':'#FCCC0A','R':'#FCCC0A','W':'#FCCC0A','S':'#808183','SIR':'#0078C6'};
 
-let current = null; // {lat,lng}
+/* ============================== inspect ============================== */
+let current = null;
 async function inspect(lat, lng, geoFeature=null){
   await ready;
-  // bounds guard: rough NYC box
-  if (lat<40.46 || lat>40.95 || lng<-74.30 || lng>-73.65){
-    alert('That point is outside New York City.'); return;
-  }
+  if (lat<40.46 || lat>40.95 || lng<-74.30 || lng>-73.65){ alert('That point is outside New York City.'); return; }
   current = {lat,lng};
   history.replaceState(null,'',`#${lat.toFixed(5)},${lng.toFixed(5)}`);
   $('hero').classList.add('hidden');
   $('topsearch').style.display='block';
-  dropPin(lat,lng);
-  // center the pin in the part of the map the panel does not cover
+  dropPin(lat,lng); clearPoi();
   const z = Math.max(map.getZoom(), 14);
   const desktop = window.innerWidth > 720;
   const px = map.project([lat,lng], z);
-  const center = map.unproject(desktop ? px.subtract([215,0]) : px.add([0,window.innerHeight*0.18]), z);
-  map.flyTo(center, z, {duration:.7});
+  map.flyTo(map.unproject(desktop ? px.subtract([215,0]) : px.add([0,window.innerHeight*0.18]), z), z, {duration:.7});
 
-  // reverse geocode if we don't already have an address feature
-  const rev = geoFeature || await reverse(lat,lng);
+  let rev = geoFeature, revFailed = false;
+  if (!rev){ const rr = await reverse(lat,lng); rev = rr.f; revFailed = rr.failed; }
   const props = rev?.properties || {};
   const bbl = props.addendum?.pad?.bbl || null;
-  // distance from clicked point to returned address point
   let revDist = null;
   if (rev && !geoFeature){
     const [rlng,rlat] = rev.geometry.coordinates;
     revDist = haversine(lat,lng,rlat,rlng);
   }
 
-  // static lookups
-  const nta   = lookup(LAYERS.nta, lat, lng);
-  const cd    = lookup(LAYERS.cd, lat, lng);
-  const cc    = lookup(LAYERS.council, lat, lng);
-  const pp    = lookup(LAYERS.precinct, lat, lng);
-  const sd    = lookup(LAYERS.schooldist, lat, lng);
-  const es    = lookup(LAYERS.eszones, lat, lng);
-  const ms    = lookup(LAYERS.mszones, lat, lng);
-  const dsny  = lookup(LAYERS.dsny, lat, lng);
-  const cong  = lookup(LAYERS.congress, lat, lng);
-  const asm   = lookup(LAYERS.assembly, lat, lng);
-  const sen   = lookup(LAYERS.senate, lat, lng);
-  const hurr  = lookup(LAYERS.hurricane, lat, lng);
-  const hist  = lookup(LAYERS.historic, lat, lng);
-
+  const nta=lookup(LAYERS.nta,lat,lng), cd=lookup(LAYERS.cd,lat,lng), cc=lookup(LAYERS.council,lat,lng),
+    pp=lookup(LAYERS.precinct,lat,lng), sd=lookup(LAYERS.schooldist,lat,lng), es=lookup(LAYERS.eszones,lat,lng),
+    ms=lookup(LAYERS.mszones,lat,lng), dsny=lookup(LAYERS.dsny,lat,lng), cong=lookup(LAYERS.congress,lat,lng),
+    asm=lookup(LAYERS.assembly,lat,lng), sen=lookup(LAYERS.senate,lat,lng), hurr=lookup(LAYERS.hurricane,lat,lng),
+    hist=lookup(LAYERS.historic,lat,lng);
   const boro = nta?.properties.boroname || props.borough || '';
+  const zip = props.postalcode || null;
   const O = DATA.officials;
 
   /* ----- header ----- */
   const addrLine = props.name ? esc(props.name) : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-  const subBits = [boro, props.postalcode ? 'ZIP ' + esc(props.postalcode) : null].filter(Boolean).join(' · ');
+  const subBits = [boro, zip ? 'ZIP ' + esc(zip) : null].filter(Boolean).join(' · ');
   let html = `<div class="phead">
     <div class="kicker">Point report</div>
     <h2>${addrLine}</h2>
-    <div class="sub">${nta ? `<b style="color:#fff">${esc(nta.properties.ntaname)}</b> · ` : ''}${subBits}</div>
+    <div class="sub">${nta ? `<b style="color:#fff">${esc(nta.properties.ntaname)}</b> · ` : ''}${subBits}<span id="elev"></span></div>
     ${revDist!=null && revDist>40 ? `<div class="nearnote">Nearest address point, ${Math.round(revDist)} meters from where you clicked</div>` : ''}
-    <div class="actions"><button id="copylink">Copy link to this spot</button><button id="gsv">Street View ↗</button></div>
+    <div class="actions"><button id="copylink">Copy link</button>
+      <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}" target="_blank" rel="noopener">Street View ↗</a>
+    </div>
   </div>`;
 
   /* ----- 1 · the place ----- */
   const hz = hurr?.properties.hurricane_;
   const inZone = hz && hz !== 'X' && hz !== '7';
+  const cdCode = cd ? String(cd.properties.boro_cd) : null;
+  const aq = cdCode ? DATA.airquality.cd[String(+cdCode)] : null;
+  const hvi = zip ? DATA.hvi[zip] : null;
   html += `<section class="blk"><h3><span class="num">1</span> The place</h3>`;
   if (nta){
-    const cdtaName = (nta.properties.cdtaname||'').replace(/^\w+\d+\s/,'').replace(/\s\(CD \d+ Equivalent\)/,'');
+    const cdtaName = (nta.properties.cdtaname||'').replace(/^\w+\d+\s/,'').replace(/\s\(CD \d+ (Equivalent|Approximation)\)/,'');
     html += row('Neighborhood', `${esc(nta.properties.ntaname)}<span class="meta">Neighborhood tabulation area ${esc(nta.properties.nta2020)}</span>`, 'nta');
     html += row('Borough', esc(boro));
-    if (cd) html += row('Community district', `${esc(boro)} CD ${+String(cd.properties.boro_cd).slice(1)}<span class="meta">Community Board ${+String(cd.properties.boro_cd).slice(1)}${cdtaName?' · '+esc(cdtaName):''}</span>`, 'cd');
+    if (cd) html += row('Community district', `${esc(boro)} CD ${+cdCode.slice(1)}<span class="meta">Community Board ${+cdCode.slice(1)}${cdtaName?' · '+esc(cdtaName):''}</span>`, 'cd');
   } else {
-    html += `<div class="errnote">This point does not fall inside a 2020 neighborhood tabulation area (it may be in water).</div>`;
+    html += `<div class="errnote">This point is not inside any neighborhood boundary — it is probably in the water. Showing whatever still applies.</div>`;
   }
   if (hist) html += row('Historic district', `<span class="badge hist">${esc(hist.properties.area_name)}</span><span class="meta">Landmarks Preservation Commission ${esc(hist.properties.lp_number||'')}</span>`, 'historic');
   html += row('Hurricane evacuation', inZone
       ? `<span class="badge zone${esc(hz)}">Zone ${esc(hz)}</span><span class="meta">Zone 1 evacuates first; zone 6 last</span>`
       : `<span class="badge nozone">Not in an evacuation zone</span>`, inZone ? 'hurricane' : null);
+  if (aq) html += row('Air quality (2023)', `PM2.5 ${aq.pm25} µg/m³ · NO₂ ${aq.no2} ppb<span class="meta">citywide ${DATA.airquality.city.pm25} and ${DATA.airquality.city.no2} · community district annual averages</span>`);
+  if (hvi) html += row('Heat vulnerability', `${hvi} of 5<span class="meta">Health department index for ZIP ${esc(zip)}; 5 = most at risk in heat waves</span>`);
   html += `</section>`;
 
   /* ----- 2 · representation ----- */
@@ -478,7 +493,7 @@ async function inspect(lat, lng, geoFeature=null){
   }
   if (sen){
     const d = String(+sen.properties.st_sen_dist), m = O.senate[d];
-    html += row('State Senate', m ? `${esc(m.name)}${partyTag(m.party)}<span class="meta">District ${d}</span>` : `District ${d}`, 'senate');
+    html += row('State Senate', m ? `<a href="https://www.nysenate.gov/district/${d}" target="_blank" rel="noopener">${esc(m.name)}</a>${partyTag(m.party)}<span class="meta">District ${d}</span>` : `District ${d}`, 'senate');
   }
   if (asm){
     const d = String(+asm.properties.assembly_district), m = O.assembly[d];
@@ -490,32 +505,37 @@ async function inspect(lat, lng, geoFeature=null){
   html += row('United States Senate', O.citywide.us_senators.map(s=>esc(s.name)).join('<br>'));
   html += `<div class="note">Officeholders as of June 2026, from the City Council, the unitedstates legislators project and Open States.</div></section>`;
 
-  /* ----- 3 · services ----- */
-  html += `<section class="blk"><h3><span class="num">3</span> City services</h3>`;
+  /* ----- 3 · schools ----- */
+  html += `<section class="blk"><h3><span class="num">3</span> Schools</h3>`;
+  if (sd) html += row('School district', `District ${+sd.properties.schooldist}`, 'schooldist');
+  if (es?.properties.label) html += row('Zoned elementary', schoolLinks(es.properties), 'eszones');
+  else html += row('Zoned elementary', `<span class="meta" style="display:inline">No zoned school — choice or unzoned area</span>`);
+  if (ms?.properties.label) html += row('Zoned middle school', schoolLinks(ms.properties), 'mszones');
+  html += `<div class="subhead">Nearest public schools</div>${nearestSchools(lat,lng)}
+  <div class="note">Zones are 2024-2025; locations are the Department of Education's latest published point file (2019-20) with 2021-22 enrollment — confirm with MySchools before enrolling. School links go to the DOE page; "profile" links go to InsideSchools.</div></section>`;
+
+  /* ----- 4 · city services ----- */
+  html += `<section class="blk"><h3><span class="num">4</span> City services</h3>`;
   if (pp){
     const n = +pp.properties.precinct;
     html += row('Police precinct', `<a href="${precinctUrl(n)}" target="_blank" rel="noopener">${n===22?'Central Park Precinct':ordinal(n)+' Precinct'}</a>`, 'precinct');
   }
   if (dsny) html += row('Sanitation district', `${esc(dsny.properties.district)}<span class="meta">Department of Sanitation collection district</span>`, 'dsny');
-  if (sd) html += row('School district', `District ${+sd.properties.schooldist}`, 'schooldist');
-  if (es?.properties.label) html += row('Zoned elementary', schoolLinks(es.properties), 'eszones');
-  else html += row('Zoned elementary', `<span class="meta" style="display:inline">No zoned school — choice or unzoned area</span>`);
-  if (ms?.properties.label) html += row('Zoned middle school', schoolLinks(ms.properties), 'mszones');
-  html += `<div class="note">School zones are 2024-2025 and can change; confirm with the school or MySchools before enrolling.</div></section>`;
+  html += subwayHtml(lat,lng);
+  html += `</section>`;
 
-  /* ----- 4 · the lot (live) ----- */
-  html += `<section class="blk" id="lotblk"><h3><span class="num">4</span> This lot</h3><div id="lotbody"><span class="spin"></span> Pulling property records…</div></section>`;
-
-  /* ----- 5 · around here (live) ----- */
-  html += `<section class="blk" id="nearblk"><h3><span class="num">5</span> Around here</h3>
-    <div id="subwaybody"></div>
-    <div id="c311body" style="margin-top:12px"><span class="spin"></span> 311 complaints nearby…</div>
-    <div id="crimebody" style="margin-top:12px"><span class="spin"></span> Crime reports nearby…</div>
-    <div id="foodbody" style="margin-top:12px"><span class="spin"></span> Restaurant grades nearby…</div>
-  </section>`;
-
-  /* ----- 6 · neighborhood numbers ----- */
+  /* ----- 5 · the lot (lazy) ----- */
+  html += lazySection(5, 'This lot', 'lot');
+  /* ----- 6 · around here (lazy) ----- */
+  html += lazySection(6, 'Around here', 'around');
+  /* ----- 7 · new and changing (lazy) ----- */
+  html += lazySection(7, 'New and changing', 'changing');
+  /* ----- 8 · landmarks and lore (lazy) ----- */
+  html += lazySection(8, 'Landmarks and lore', 'lore');
+  /* ----- 9 · neighborhood numbers ----- */
   html += demographicsBlock(nta, boro);
+  /* ----- 10 · read more ----- */
+  html += readMoreBlock(nta, boro, bbl, zip);
 
   html += `<div class="pfoot">Boundaries and demographics: New York City Department of City Planning and the United States Census Bureau (American Community Survey 2016-2020). Live feeds: NYC Open Data. Lookups are point-in-polygon against simplified boundaries — addresses sitting exactly on a district line can resolve to the neighbor. <a href="methodology.html">How this all works →</a></div>`;
 
@@ -523,56 +543,103 @@ async function inspect(lat, lng, geoFeature=null){
   $('panel').classList.add('open');
   $('panelbody').scrollTop = 0;
 
-  // wire hover highlights
   const featMap = {nta, cd, council:cc, precinct:pp, schooldist:sd, eszones:es, mszones:ms, dsny, congress:cong, assembly:asm, senate:sen, hurricane:hurr, historic:hist};
   document.querySelectorAll('#panelbody .row.hl').forEach(r => {
     r.addEventListener('mouseenter', () => showShape(featMap[r.dataset.layer]));
     r.addEventListener('mouseleave', clearShape);
   });
-  $('copylink')?.addEventListener('click', e => {
-    navigator.clipboard.writeText(location.href).then(()=>{ e.target.textContent='Copied ✓'; setTimeout(()=>e.target.textContent='Copy link to this spot',1500); });
+  document.querySelectorAll('#panelbody .poi').forEach(li => {
+    li.addEventListener('mouseenter', () => showPoi(+li.dataset.lat, +li.dataset.lng, li.dataset.name));
+    li.addEventListener('mouseleave', clearPoi);
   });
-  $('gsv')?.addEventListener('click', () => window.open(`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`,'_blank'));
+  $('copylink')?.addEventListener('click', e => {
+    navigator.clipboard.writeText(location.href).then(()=>{ e.target.textContent='Copied ✓'; setTimeout(()=>e.target.textContent='Copy link',1500); });
+  });
 
-  // fire live queries
-  renderSubway(lat,lng);
-  fetchLot(bbl, revDist);
-  fetch311(lat,lng);
-  fetchCrime(lat,lng);
-  fetchFood(lat,lng);
+  fetchElevation(lat,lng);
+  // lazy loaders fire as sections scroll into view
+  const ctx = {lat,lng,bbl,revDist,revFailed,nta,zip,token:Symbol()};
+  activeCtx = ctx;
+  const loaders = {lot: () => fetchLot(ctx), around: () => fetchAround(ctx), changing: () => fetchChanging(ctx), lore: () => fetchLore(ctx)};
+  const scroller = $('panelbody');
+  function checkLazy(){
+    if (stale(ctx)) return;
+    const limit = scroller.scrollTop + scroller.clientHeight + 350;
+    document.querySelectorAll('[data-lazy]').forEach(s => {
+      if (!s.dataset.loaded && s.offsetTop < limit){
+        s.dataset.loaded = '1';
+        loaders[s.dataset.lazy]?.();
+      }
+    });
+  }
+  scroller.onscroll = checkLazy;
+  checkLazy();
+  // fallback poll in case scroll events are missed; stops when all sections load
+  const poll = setInterval(() => {
+    if (stale(ctx) || !document.querySelector('[data-lazy]:not([data-loaded])')) { clearInterval(poll); return; }
+    checkLazy();
+  }, 1500);
+}
+let activeCtx = null;
+const stale = ctx => ctx !== activeCtx;
+function lazySection(num, title, key){
+  return `<section class="blk" data-lazy="${key}"><h3><span class="num">${num}</span> ${title}</h3>
+    <div id="body-${key}"><span class="spin"></span> Loading…</div></section>`;
 }
 
-function row(k, v, layerKey=null){
-  return `<div class="row${layerKey?' hl':''}"${layerKey?` data-layer="${layerKey}"`:''}><span class="k">${k}</span><span class="v">${v}</span></div>`;
-}
-function precinctUrl(n){
-  if (n===22) return 'https://www.nyc.gov/site/nypd/bureaus/patrol/precincts/central-park-precinct.page';
-  if (n===14) return 'https://www.nyc.gov/site/nypd/bureaus/patrol/precincts/midtown-south-precinct.page';
-  if (n===18) return 'https://www.nyc.gov/site/nypd/bureaus/patrol/precincts/midtown-north-precinct.page';
-  return `https://www.nyc.gov/site/nypd/bureaus/patrol/precincts/${ordinal(n)}-precinct.page`;
-}
-function schoolLinks(p){
-  // dbn like "20K503" or "19K938,19K159"; label like "938 (K-4), 159 (5)"
-  const dbns = (p.dbn||'').split(',');
-  const links = dbns.filter(Boolean).map(d => {
-    const code = d.trim().slice(2);
-    return `<a href="https://www.schools.nyc.gov/schools/${esc(code)}" target="_blank" rel="noopener">${esc(d.trim())}</a>`;
-  }).join(', ');
-  return `${links}<span class="meta">${esc(p.label)}</span>`;
-}
-
-/* ---------- live: PLUTO lot ---------- */
-const LANDUSE = {1:'One and two family buildings',2:'Multifamily walk-up',3:'Multifamily with elevator',4:'Mixed residential and commercial',5:'Commercial and office',6:'Industrial and manufacturing',7:'Transportation and utility',8:'Public facilities and institutions',9:'Open space and outdoor recreation',10:'Parking facilities',11:'Vacant land'};
-async function fetchLot(bbl, revDist){
-  const el = $('lotbody');
-  if (!bbl){ el.innerHTML = `<span class="note" style="margin:0">No tax lot found at this point (streets, parks and water are not lots).</span>`; return; }
+/* ---------- elevation ---------- */
+async function fetchElevation(lat,lng){
   try{
-    const r = await fetch(`https://data.cityofnewyork.us/resource/64uk-42ks.json?$select=address,zonedist1,zonedist2,overlay1,spdist1,bldgclass,landuse,ownername,yearbuilt,numfloors,unitsres,unitstotal,lotarea,bldgarea,assesstot,landmark,histdist,builtfar,residfar,commfar&bbl=${parseInt(bbl,10)}`);
-    const d = (await r.json())[0];
+    const r = await fetch(`https://epqs.nationalmap.gov/v1/json?x=${lng}&y=${lat}&units=Meters&wkid=4326&includeDate=false`);
+    const v = (await r.json()).value;
+    if (v!=null && isFinite(v)) $('elev').textContent = ` · ${Math.round(v*3.281)} ft above sea level`;
+  }catch(e){}
+}
+
+/* ---------- nearest schools (static) ---------- */
+function nearestSchools(lat,lng){
+  const near = DATA.schools.map(s => ({dbn:s[0],name:s[1],lat:s[2],lng:s[3],enr:s[4],span:s[5],d:haversine(lat,lng,s[2],s[3])}))
+    .sort((a,b)=>a.d-b.d).slice(0,5);
+  if (!near.length) return '';
+  return `<ul class="toplist">` + near.map(s => {
+    const code = s.dbn.slice(2);
+    return `<li class="poi" data-lat="${s.lat}" data-lng="${s.lng}" data-name="${esc(s.name)}">
+      <span><a href="https://www.schools.nyc.gov/schools/${esc(code)}" target="_blank" rel="noopener">${esc(s.name)}</a>
+        <span class="sub">${s.span?'grades '+esc(s.span)+' · ':''}${s.enr?fmt(s.enr)+' students · ':''}<a href="https://insideschools.org/school/${esc(s.dbn)}" target="_blank" rel="noopener">profile</a></span></span>
+      <span class="n">${walkmin(s.d)} min</span></li>`;
+  }).join('') + `</ul>`;
+}
+
+/* ---------- subway (static) ---------- */
+function subwayHtml(lat,lng){
+  const st = DATA.subway.map(s => ({name:s[0],lines:s[1],lat:s[2],lng:s[3],d:haversine(lat,lng,s[2],s[3])}))
+    .sort((a,b)=>a.d-b.d).slice(0,3);
+  if (!st.length || st[0].d > 3200) return row('Nearest subway','More than 2 miles away');
+  return `<div class="row"><span class="k">Nearest subway</span><span class="v"></span></div>
+    <ul class="toplist">` + st.map(s => {
+      const lines = s.lines.split(' ').map(l=>`<span class="subwayline" style="background:${LINECOLORS[l]||'#555'};${(LINECOLORS[l]==='#FCCC0A')?'color:#16213a':''}">${esc(l)}</span>`).join('');
+      return `<li class="poi" data-lat="${s.lat}" data-lng="${s.lng}" data-name="${esc(s.name)}"><span>${esc(s.name)} ${lines}</span><span class="n">${walkmin(s.d)} min walk</span></li>`;
+    }).join('') + `</ul>`;
+}
+
+/* ---------- 5 · this lot ---------- */
+async function fetchLot(ctx){
+  const el = $('body-lot'); if (!el) return;
+  const {bbl, revDist} = ctx;
+  if (!bbl){
+    el.innerHTML = ctx.revFailed
+      ? `<span class="errnote">The geocoder is not responding right now, so lot details are unavailable — try this point again in a moment.</span>`
+      : `<span class="note" style="margin:0">No tax lot found at this point (streets, parks and water are not lots).</span>`;
+    return;
+  }
+  try{
+    const rows = await soda('64uk-42ks', {'$select':'address,zonedist1,zonedist2,overlay1,spdist1,landuse,ownername,yearbuilt,numfloors,unitsres,unitstotal,lotarea,bldgarea,assesstot,landmark,builtfar,residfar,commfar','bbl':parseInt(bbl,10)});
+    if (stale(ctx)) return;
+    const d = rows[0];
     if (!d){ el.innerHTML = `<span class="note" style="margin:0">No property record found for this lot.</span>`; return; }
     let h = '';
     if (revDist!=null && revDist>40) h += `<div class="note" style="margin:0 0 8px">Showing the nearest lot, about ${Math.round(revDist)} meters away.</div>`;
-    const zoning = [d.zonedist1, d.zonedist2].filter(Boolean).join(' / ');
+    const zoning = [d.zonedist1,d.zonedist2].filter(Boolean).join(' / ');
     h += row('Zoning', `${esc(zoning)||'—'}${d.overlay1?`<span class="meta">Overlay ${esc(d.overlay1)}</span>`:''}${d.spdist1?`<span class="meta">Special district ${esc(d.spdist1)}</span>`:''}`);
     if (d.landuse) h += row('Land use', esc(LANDUSE[+d.landuse]||d.landuse));
     if (+d.yearbuilt) h += row('Year built', `${+d.yearbuilt}<span class="meta">PLUTO year built is approximate for older buildings</span>`);
@@ -583,63 +650,102 @@ async function fetchLot(bbl, revDist){
     if (d.assesstot) h += row('Assessed value', money(d.assesstot));
     if (d.ownername) h += row('Owner of record', esc(d.ownername));
     if (d.landmark) h += row('Landmark', esc(d.landmark));
-    h += `<div class="note">From the Department of City Planning's Primary Land Use Tax Lot Output (PLUTO) file, queried live.</div>`;
+    h += `<div id="hpd"></div>`;
+    const b = String(parseInt(bbl,10)), boroId = b[0], block = parseInt(b.slice(1,6),10), lot = parseInt(b.slice(6),10);
+    h += `<div class="morelinks">
+      <a href="https://zola.planning.nyc.gov/l/lot/${boroId}/${block}/${lot}" target="_blank" rel="noopener">Full zoning on ZoLa</a>
+      <a href="http://a836-acris.nyc.gov/bblsearch/bblsearch.asp?borough=${boroId}&block=${block}&lot=${lot}" target="_blank" rel="noopener">Deeds and mortgages (ACRIS)</a>
+      <a href="https://joshgreenman1973.github.io/nyc-three-eras/" target="_blank" rel="noopener">This address in 1940 and the 1980s</a>
+      <a href="https://80s.nyc/" target="_blank" rel="noopener">1980s street view (80s.nyc)</a>
+    </div>
+    <div class="note">From the Department of City Planning's Primary Land Use Tax Lot Output (PLUTO) file, queried live.</div>`;
     el.innerHTML = h;
-  }catch(e){ el.innerHTML = `<span class="errnote">Could not reach the live property feed.</span>`; }
+    fetchHpd(ctx, boroId, block, lot, +rows[0].unitsres);
+  }catch(e){ if (!stale(ctx)) el.innerHTML = `<span class="errnote">Could not reach the live property feed.</span>`; }
+}
+async function fetchHpd(ctx, boroId, block, lot, unitsres){
+  if (!unitsres) return;
+  try{
+    const rows = await soda('wvxf-dwi5', {'$select':'class,count(*) as n',
+      '$where':`boroid='${boroId}' AND block='${block}' AND lot='${lot}' AND violationstatus='Open'`,'$group':'class'});
+    if (stale(ctx) || !$('hpd')) return;
+    const total = rows.reduce((s,x)=>s+ +x.n,0);
+    const byClass = Object.fromEntries(rows.map(x=>[x.class,+x.n]));
+    $('hpd').innerHTML = row('Open housing violations', `${fmt(total)}<span class="meta">${['A','B','C'].map(c=>`class ${c}: ${byClass[c]||0}`).join(' · ')} (C is most serious)</span>`);
+  }catch(e){}
 }
 
-/* ---------- live: 311 ---------- */
-function daysAgoISO(days){
-  const d = new Date(Date.now() - days*86400000);
-  return d.toISOString().slice(0,10) + 'T00:00:00';
-}
-async function fetch311(lat,lng){
-  const el = $('c311body');
-  try{
-    const where = encodeURIComponent(`within_circle(location, ${lat}, ${lng}, 250) AND created_date > '${daysAgoISO(90)}'`);
-    const r = await fetch(`https://data.cityofnewyork.us/resource/erm2-nwe9.json?$select=complaint_type,count(*) as n&$where=${where}&$group=complaint_type&$order=n DESC&$limit=50`);
-    const rows = await r.json();
-    const total = rows.reduce((s,x)=>s+ +x.n, 0);
+/* ---------- 6 · around here ---------- */
+async function fetchAround(ctx){
+  const el = $('body-around'); if (!el) return;
+  const {lat,lng} = ctx;
+  el.innerHTML = `<div id="c311"><span class="spin"></span> 311 complaints…</div>
+    <div id="crime" style="margin-top:12px"><span class="spin"></span> Crime reports…</div>
+    <div id="crash" style="margin-top:12px"><span class="spin"></span> Traffic crashes…</div>
+    <div id="trees" style="margin-top:12px"><span class="spin"></span> Street trees…</div>
+    <div id="food" style="margin-top:12px"><span class="spin"></span> Restaurant grades…</div>`;
+  // 311
+  soda('erm2-nwe9',{'$select':'complaint_type,count(*) as n',
+    '$where':`within_circle(location, ${lat}, ${lng}, 250) AND created_date > '${daysAgoISO(90)}'`,
+    '$group':'complaint_type','$order':'n DESC','$limit':50})
+  .then(rows => {
+    if (stale(ctx)||!$('c311')) return;
+    const total = rows.reduce((s,x)=>s+ +x.n,0);
     let h = `<div class="row"><span class="k">311 complaints, last 90 days within 250 meters</span><span class="v bignum">${fmt(total)}</span></div>`;
-    if (rows.length) h += `<ul class="toplist">` + rows.slice(0,5).map(x=>`<li><span>${esc(x.complaint_type)}</span><span class="n">${fmt(x.n)}</span></li>`).join('') + `</ul>`;
-    el.innerHTML = h;
-  }catch(e){ el.innerHTML = `<span class="errnote">311 feed unavailable right now.</span>`; }
-}
-
-/* ---------- live: crime ---------- */
-async function fetchCrime(lat,lng){
-  const el = $('crimebody');
-  try{
-    const yr = new Date().getFullYear();
-    const where = encodeURIComponent(`within_circle(lat_lon, ${lat}, ${lng}, 500) AND rpt_dt >= '${yr}-01-01T00:00:00'`);
-    const r = await fetch(`https://data.cityofnewyork.us/resource/5uac-w243.json?$select=ofns_desc,count(*) as n&$where=${where}&$group=ofns_desc&$order=n DESC&$limit=50`);
-    const rows = await r.json();
-    const total = rows.reduce((s,x)=>s+ +x.n, 0);
+    if (rows.length) h += `<ul class="toplist">`+rows.slice(0,5).map(x=>`<li><span>${esc(x.complaint_type)}</span><span class="n">${fmt(x.n)}</span></li>`).join('')+`</ul>`;
+    $('c311').innerHTML = h;
+  }).catch(()=>{ if(!stale(ctx)&&$('c311')) $('c311').innerHTML='<span class="errnote">311 feed unavailable right now.</span>'; });
+  // crime
+  const yr = new Date().getFullYear();
+  soda('5uac-w243',{'$select':'ofns_desc,count(*) as n',
+    '$where':`within_circle(lat_lon, ${lat}, ${lng}, 500) AND rpt_dt >= '${yr}-01-01T00:00:00'`,
+    '$group':'ofns_desc','$order':'n DESC','$limit':50})
+  .then(rows => {
+    if (stale(ctx)||!$('crime')) return;
+    const total = rows.reduce((s,x)=>s+ +x.n,0);
     let h = `<div class="row"><span class="k">Crime complaints reported to the New York Police Department in ${yr}, within 500 meters</span><span class="v bignum">${fmt(total)}</span></div>`;
-    if (rows.length) h += `<ul class="toplist">` + rows.slice(0,5).map(x=>`<li><span>${titleCaseOfns(x.ofns_desc)}</span><span class="n">${fmt(x.n)}</span></li>`).join('') + `</ul>`;
-    h += `<div class="note">Counted by the date the complaint was reported. A 500 meter circle crosses neighborhood lines and includes busy corridors; this is context, not a safety score.</div>`;
-    el.innerHTML = h;
-  }catch(e){ el.innerHTML = `<span class="errnote">Crime feed unavailable right now.</span>`; }
-}
-function titleCaseOfns(s){
-  if (!s) return '—';
-  return esc(s.toLowerCase().replace(/(^|\s|\/)\w/g, c=>c.toUpperCase()).replace(/ & Related Of(fenses)?$/i,''));
-}
-
-/* ---------- live: restaurants ---------- */
-async function fetchFood(lat,lng){
-  const el = $('foodbody');
-  try{
-    const where = encodeURIComponent(`within_circle(location, ${lat}, ${lng}, 200) AND grade IS NOT NULL AND inspection_date > '${daysAgoISO(365*2)}'`);
-    const r = await fetch(`https://data.cityofnewyork.us/resource/43nn-pn8j.json?$select=camis,dba,grade,max(inspection_date) as d&$where=${where}&$group=camis,dba,grade&$limit=400`);
-    const rows = await r.json();
-    // keep latest grade per restaurant
+    if (rows.length) h += `<ul class="toplist">`+rows.slice(0,5).map(x=>`<li><span>${titleCaseOfns(x.ofns_desc)}</span><span class="n">${fmt(x.n)}</span></li>`).join('')+`</ul>`;
+    h += `<div class="note">Counted by report date. Raw complaint counts reflect density, foot traffic and reporting behavior as much as conditions — context, not a safety score. Locations of sex crimes and some other offenses are withheld by the department.</div>`;
+    $('crime').innerHTML = h;
+  }).catch(()=>{ if(!stale(ctx)&&$('crime')) $('crime').innerHTML='<span class="errnote">Crime feed unavailable right now.</span>'; });
+  // crashes
+  soda('h9gi-nx95',{'$select':'count(*) as n, sum(number_of_persons_injured) as inj, sum(number_of_persons_killed) as killed',
+    '$where':`within_circle(location, ${lat}, ${lng}, 250) AND crash_date > '${daysAgoISO(365)}'`})
+  .then(rows => {
+    if (stale(ctx)||!$('crash')) return;
+    const d = rows[0]||{};
+    $('crash').innerHTML = `<div class="row"><span class="k">Traffic crashes, last 12 months within 250 meters</span><span class="v"></span></div>
+      <div class="statpair">
+        <div class="g"><b>${fmt(d.n)}</b><span>reported crashes</span></div>
+        <div class="g"><b>${fmt(d.inj)}</b><span>people injured</span></div>
+        <div class="g" style="${+d.killed?'border-color:#b3382c':''}"><b style="${+d.killed?'color:#b3382c':''}">${fmt(d.killed)}</b><span>killed</span></div>
+      </div>`;
+  }).catch(()=>{ if(!stale(ctx)&&$('crash')) $('crash').innerHTML='<span class="errnote">Crash feed unavailable right now.</span>'; });
+  // trees
+  soda('hn5i-inap',{'$select':'genusspecies,count(*) as n',
+    '$where':`within_circle(location, ${lat}, ${lng}, 200)`,'$group':'genusspecies','$order':'n DESC','$limit':30})
+  .then(rows => {
+    if (stale(ctx)||!$('trees')) return;
+    const total = rows.reduce((s,x)=>s+ +x.n,0);
+    if (!total){ $('trees').innerHTML = row('Street trees within 200 meters','0'); return; }
+    const top = rows.slice(0,3).map(x=>{
+      const common = (x.genusspecies||'').split(' - ')[1] || x.genusspecies;
+      return `${esc(common)} (${fmt(x.n)})`;
+    }).join(', ');
+    $('trees').innerHTML = row('Street trees within 200 meters', `${fmt(total)}<span class="meta">mostly ${top}</span>`);
+  }).catch(()=>{ if(!stale(ctx)&&$('trees')) $('trees').innerHTML='<span class="errnote">Tree feed unavailable right now.</span>'; });
+  // restaurants
+  soda('43nn-pn8j',{'$select':'camis,dba,grade,max(inspection_date) as d',
+    '$where':`within_circle(location, ${lat}, ${lng}, 200) AND grade IS NOT NULL AND inspection_date > '${daysAgoISO(730)}'`,
+    '$group':'camis,dba,grade','$limit':400})
+  .then(rows => {
+    if (stale(ctx)||!$('food')) return;
     const latest = {};
     rows.forEach(x => { if (!latest[x.camis] || x.d > latest[x.camis].d) latest[x.camis] = x; });
     const vals = Object.values(latest);
-    if (!vals.length){ el.innerHTML = `<div class="row"><span class="k">Graded restaurants within 200 meters</span><span class="v bignum">0</span></div>`; return; }
+    if (!vals.length){ $('food').innerHTML = `<div class="row"><span class="k">Graded restaurants within 200 meters</span><span class="v bignum">0</span></div>`; return; }
     const count = g => vals.filter(v=>v.grade===g).length;
-    el.innerHTML = `<div class="row"><span class="k">Restaurant inspection grades within 200 meters</span><span class="v bignum">${vals.length}</span></div>
+    $('food').innerHTML = `<div class="row"><span class="k">Restaurant inspection grades within 200 meters</span><span class="v bignum">${vals.length}</span></div>
       <div class="grades">
         <div class="g gA"><b>${count('A')}</b><span>grade A</span></div>
         <div class="g gB"><b>${count('B')}</b><span>grade B</span></div>
@@ -647,90 +753,202 @@ async function fetchFood(lat,lng){
         <div class="g"><b>${vals.length-count('A')-count('B')-count('C')}</b><span>pending / other</span></div>
       </div>
       <div class="note">Latest posted grade per restaurant, inspections from the last two years.</div>`;
-  }catch(e){ el.innerHTML = `<span class="errnote">Inspection feed unavailable right now.</span>`; }
+  }).catch(()=>{ if(!stale(ctx)&&$('food')) $('food').innerHTML='<span class="errnote">Inspection feed unavailable right now.</span>'; });
+}
+function titleCaseOfns(s){
+  if (!s) return '—';
+  return esc(s.toLowerCase().replace(/(^|\s|\/)\w/g,c=>c.toUpperCase()).replace(/ & Related Of(fenses)?$/i,''));
 }
 
-/* ---------- subway ---------- */
-const LINECOLORS = {'1':'#EE352E','2':'#EE352E','3':'#EE352E','4':'#00933C','5':'#00933C','6':'#00933C','7':'#B933AD',
- 'A':'#0039A6','C':'#0039A6','E':'#0039A6','B':'#FF6319','D':'#FF6319','F':'#FF6319','M':'#FF6319',
- 'G':'#6CBE45','J':'#996633','Z':'#996633','L':'#A7A9AC','N':'#FCCC0A','Q':'#FCCC0A','R':'#FCCC0A','W':'#FCCC0A',
- 'S':'#808183','SIR':'#0078C6'};
-function haversine(lat1,lon1,lat2,lon2){
-  const R=6371000, t=Math.PI/180;
-  const a = Math.sin((lat2-lat1)*t/2)**2 + Math.cos(lat1*t)*Math.cos(lat2*t)*Math.sin((lon2-lon1)*t/2)**2;
-  return 2*R*Math.asin(Math.sqrt(a));
+/* ---------- 7 · new and changing ---------- */
+async function fetchChanging(ctx){
+  const el = $('body-changing'); if (!el) return;
+  const {lat,lng,nta,zip} = ctx;
+  el.innerHTML = `<div id="newfood"><span class="spin"></span> New restaurants…</div>
+    <div id="building" style="margin-top:12px"><span class="spin"></span> Construction and demolition…</div>
+    <div id="newbiz" style="margin-top:12px"><span class="spin"></span> Newly licensed businesses…</div>
+    <div id="film" style="margin-top:12px"><span class="spin"></span> Film shoots…</div>`;
+  // new restaurants: first-ever inspection in the last 9 months
+  soda('43nn-pn8j',{'$select':'camis,dba,min(inspection_date) as first_seen',
+    '$where':`within_circle(location, ${lat}, ${lng}, 500)`,'$group':'camis,dba',
+    '$having':`min(inspection_date) > '${daysAgoISO(270)}'`,'$order':'first_seen DESC','$limit':8})
+  .then(rows => {
+    if (stale(ctx)||!$('newfood')) return;
+    let h = `<div class="row"><span class="k">New restaurants and food spots within 500 meters</span><span class="v bignum">${rows.length}${rows.length===8?'+':''}</span></div>`;
+    if (rows.length) h += `<ul class="toplist">`+rows.slice(0,6).map(x=>`<li><span>${esc(titleWords(x.dba))}</span><span class="n">${monthYear(x.first_seen)}</span></li>`).join('')+`</ul>`;
+    h += `<div class="note">"New" means first-ever health inspection in the last nine months — a good proxy for openings.</div>`;
+    $('newfood').innerHTML = h;
+  }).catch(()=>{ if(!stale(ctx)&&$('newfood')) $('newfood').innerHTML='<span class="errnote">Inspection feed unavailable right now.</span>'; });
+  // construction: DOB NOW filings in this neighborhood
+  if (nta){
+    const name = nta.properties.ntaname.replace(/'/g,"''");
+    soda('w9ak-ipjd',{'$select':'job_type,filing_date,house_no,street_name,job_description',
+      '$where':`nta='${name}' AND filing_date > '${daysAgoISO(365)}' AND job_type in('New Building','Full Demolition')`,
+      '$order':'filing_date DESC','$limit':40})
+    .then(rows => {
+      if (stale(ctx)||!$('building')) return;
+      const nb = rows.filter(r=>r.job_type==='New Building'), dm = rows.filter(r=>r.job_type==='Full Demolition');
+      let h = `<div class="row"><span class="k">Filed in ${esc(nta.properties.ntaname)}, last 12 months</span><span class="v"></span></div>
+        <div class="statpair">
+          <div class="g"><b>${nb.length}</b><span>new building filings</span></div>
+          <div class="g"><b>${dm.length}</b><span>demolition filings</span></div>
+        </div>`;
+      const show = rows.slice(0,4);
+      if (show.length) h += `<ul class="toplist">`+show.map(x=>`<li><span>${esc(titleWords((x.house_no||'')+' '+(x.street_name||'')))}<span class="sub">${x.job_type==='New Building'?'new building':'demolition'} · filed ${monthYear(x.filing_date)}</span></span></li>`).join('')+`</ul>`;
+      h += `<div class="note">Department of Buildings DOB NOW job filings (neighborhood-wide, not radius).</div>`;
+      $('building').innerHTML = h;
+    }).catch(()=>{ if(!stale(ctx)&&$('building')) $('building').innerHTML='<span class="errnote">Buildings feed unavailable right now.</span>'; });
+  } else $('building').innerHTML = '';
+  // newly licensed businesses (bbox ≈ 400 m)
+  const dy = 0.0036, dx = 0.0047;
+  soda('w7w3-xahh',{'$select':'business_name,dba_trade_name,business_category,license_creation_date',
+    '$where':`latitude::number between ${lat-dy} and ${lat+dy} AND longitude::number between ${lng-dx} and ${lng+dx} AND license_creation_date > '${daysAgoISO(365)}' AND license_status='Active'`,
+    '$order':'license_creation_date DESC','$limit':6})
+  .then(rows => {
+    if (stale(ctx)||!$('newbiz')) return;
+    if (!rows.length){ $('newbiz').innerHTML = row('Newly licensed businesses nearby','None in the last year<span class="meta">covers trades the city licenses, not every storefront</span>'); return; }
+    let h = `<div class="row"><span class="k">Newly licensed businesses within ~400 meters, last 12 months</span><span class="v bignum">${rows.length}${rows.length===6?'+':''}</span></div>
+      <ul class="toplist">`+rows.map(x=>`<li><span>${esc(titleWords(x.dba_trade_name||x.business_name))}<span class="sub">${esc(x.business_category||'')}</span></span><span class="n">${monthYear(x.license_creation_date)}</span></li>`).join('')+`</ul>
+      <div class="note">Department of Consumer and Worker Protection licenses — covers licensed trades only, not every new storefront.</div>`;
+    $('newbiz').innerHTML = h;
+  }).catch(()=>{ if(!stale(ctx)&&$('newbiz')) $('newbiz').innerHTML='<span class="errnote">License feed unavailable right now.</span>'; });
+  // film shoots by ZIP
+  if (zip){
+    soda('tg4x-b46p',{'$select':'category,subcategoryname,startdatetime,parkingheld',
+      '$where':`zipcode_s LIKE '%${zip}%' AND startdatetime > '${daysAgoISO(180)}' AND eventtype='Shooting Permit'`,
+      '$order':'startdatetime DESC','$limit':5})
+    .then(rows => {
+      if (stale(ctx)||!$('film')) return;
+      if (!rows.length){ $('film').innerHTML = row('Film and TV shoots in this ZIP','None permitted in the last six months'); return; }
+      let h = `<div class="row"><span class="k">Film and TV shoots permitted in ZIP ${esc(zip)}, last six months</span><span class="v bignum">${rows.length}${rows.length===5?'+':''}</span></div>
+        <ul class="toplist">`+rows.map(x=>{
+          const street = (x.parkingheld||'').split(',')[0].toLowerCase().replace(/\s+/g,' ').trim();
+          return `<li><span>${esc(x.category||'Production')}${x.subcategoryname && x.subcategoryname!=='Not Applicable'?' · '+esc(x.subcategoryname):''}<span class="sub">${esc(titleWords(street))}</span></span><span class="n">${monthYear(x.startdatetime)}</span></li>`;
+        }).join('')+`</ul>
+        <div class="note">Mayor's Office of Media and Entertainment permits; the city updates this dataset irregularly.</div>`;
+      $('film').innerHTML = h;
+    }).catch(()=>{ if(!stale(ctx)&&$('film')) $('film').innerHTML='<span class="errnote">Film permit feed unavailable right now.</span>'; });
+  } else $('film').innerHTML = '';
 }
-function renderSubway(lat,lng){
-  const el = $('subwaybody');
-  const st = DATA.subway.map(s => ({name:s[0], lines:s[1], d:haversine(lat,lng,s[2],s[3])}))
-    .sort((a,b)=>a.d-b.d).slice(0,3);
-  if (!st.length || st[0].d > 3200){ el.innerHTML = row('Nearest subway','More than 2 miles away'); return; }
-  el.innerHTML = `<div class="row"><span class="k">Nearest subway</span><span class="v"></span></div>
-    <ul class="toplist">` + st.map(s => {
-      const lines = s.lines.split(' ').map(l=>`<span class="subwayline" style="background:${LINECOLORS[l]||'#555'};${(LINECOLORS[l]==='#FCCC0A')?'color:#16213a':''}">${esc(l)}</span>`).join('');
-      const min = Math.max(1, Math.round(s.d/80));
-      return `<li><span>${esc(s.name)} ${lines}</span><span class="n">${min} min walk</span></li>`;
-    }).join('') + `</ul>`;
+function titleWords(s){ return String(s||'').toLowerCase().replace(/(^|\s|-|\/)\w/g,c=>c.toUpperCase()); }
+function monthYear(iso){
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US',{month:'short', year:'numeric'});
 }
 
-/* ---------- demographics ---------- */
+/* ---------- 8 · landmarks and lore ---------- */
+async function fetchLore(ctx){
+  const el = $('body-lore'); if (!el) return;
+  const {lat,lng} = ctx;
+  // nearest landmarks (static)
+  const near = DATA.landmarks.map(l => ({name:l[0],lat:l[1],lng:l[2],year:l[3],url:l[4],d:haversine(lat,lng,l[1],l[2])}))
+    .sort((a,b)=>a.d-b.d).slice(0,4).filter(l=>l.d<2500);
+  let h = `<div class="subhead" style="margin-top:0">Nearest individual landmarks</div>`;
+  if (near.length){
+    h += `<ul class="toplist">`+near.map(l=>`<li class="poi" data-lat="${l.lat}" data-lng="${l.lng}" data-name="${esc(l.name)}">
+      <span>${l.url?`<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)}</a>`:esc(l.name)}<span class="sub">designated ${esc(l.year)||'—'}</span></span>
+      <span class="n">${walkmin(l.d)} min</span></li>`).join('')+`</ul>`;
+  } else h += `<div class="note" style="margin:0 0 6px">No designated individual landmark within about a 30 minute walk.</div>`;
+  h += `<div class="subhead">Nearby on Wikipedia</div><div id="wiki"><span class="spin"></span></div>
+  <div class="note">Landmark links open the Landmarks Preservation Commission designation report. Wikipedia results are whatever articles are geotagged closest to this point.</div>`;
+  el.innerHTML = h;
+  el.querySelectorAll('.poi').forEach(li => {
+    li.addEventListener('mouseenter', () => showPoi(+li.dataset.lat, +li.dataset.lng, li.dataset.name));
+    li.addEventListener('mouseleave', clearPoi);
+  });
+  try{
+    const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}|${lng}&gsradius=800&gslimit=5&format=json&origin=*`);
+    const items = (await r.json()).query?.geosearch || [];
+    if (stale(ctx)||!$('wiki')) return;
+    if (!items.length){ $('wiki').innerHTML = '<span class="note" style="margin:0">Nothing geotagged within 800 meters.</span>'; return; }
+    $('wiki').innerHTML = `<ul class="toplist">`+items.map(w=>`<li class="poi" data-lat="${w.lat}" data-lng="${w.lon}" data-name="${esc(w.title)}">
+      <span><a href="https://en.wikipedia.org/wiki/${encodeURIComponent(w.title.replace(/ /g,'_'))}" target="_blank" rel="noopener">${esc(w.title)}</a></span>
+      <span class="n">${w.dist<100?Math.round(w.dist)+' m':walkmin(w.dist)+' min'}</span></li>`).join('')+`</ul>`;
+    $('wiki').querySelectorAll('.poi').forEach(li => {
+      li.addEventListener('mouseenter', () => showPoi(+li.dataset.lat, +li.dataset.lng, li.dataset.name));
+      li.addEventListener('mouseleave', clearPoi);
+    });
+  }catch(e){ if(!stale(ctx)&&$('wiki')) $('wiki').innerHTML='<span class="errnote">Wikipedia unavailable right now.</span>'; }
+}
+
+/* ---------- 9 · demographics ---------- */
 function demographicsBlock(nta, boro){
   if (!nta) return '';
   const code = nta.properties.nta2020;
   const D = DATA.nta_demographics[code];
   const CITY = DATA.compare_geos.NYC;
+  const BORO = DATA.compare_geos[boro];
   const isPark = nta.properties.ntatype && nta.properties.ntatype !== '0';
-  let h = `<section class="blk"><h3><span class="num">6</span> ${esc(nta.properties.ntaname)} in numbers</h3>`;
-  if (!D || !D.pop || isPark && D.pop < 200){
+  let h = `<section class="blk"><h3><span class="num">9</span> ${esc(nta.properties.ntaname)} in numbers</h3>`;
+  if (!D || !D.pop || (isPark && D.pop < 200)){
     h += `<div class="note" style="margin:0">This area (a park, airport, cemetery or other special zone) has no meaningful residential profile.</div></section>`;
     return h;
   }
-  h += row('Population', fmt(D.pop));
+  h += row('Population', `${fmt(D.pop)}<span class="meta">${D.land_sqmi?D.land_sqmi.toFixed(2)+' square miles':''}</span>`);
   if (D.median_age) h += row('Median age', D.median_age);
   if (D.avg_hh_size) h += row('Average household size', D.avg_hh_size);
   h += `<div style="height:10px"></div>
-  <div class="legendline"><span><span class="sw"></span>${esc(nta.properties.ntaname).length>24?'this neighborhood':esc(nta.properties.ntaname)}</span><span><span class="mk"></span>citywide</span></div>`;
-  h += cmpDollar('Median household income', D.median_hh_income, CITY.median_hh_income, 160000);
-  h += cmpDollar('Median gross rent', D.median_rent, CITY.median_rent, 3500);
-  h += cmpPct('Foreign born', D.foreign_born_pct, CITY.foreign_born_pct);
-  h += cmpPct('Below poverty line', D.poverty_pct, CITY.poverty_pct);
-  h += cmpPct("Bachelor's degree or higher", D.bachelors_plus_pct, CITY.bachelors_plus_pct);
-  h += cmpPct('Limited English', D.limited_english_pct, CITY.limited_english_pct);
-  h += cmpPct('Renters', D.renter_occ_pct, CITY.renter_occ_pct);
-  h += cmpPct('Rent burdened (30%+ of income)', D.rent_burdened_pct, CITY.rent_burdened_pct);
-
-  // race/ethnicity composition
-  const seg = [['Hispanic', D.hispanic_pct, '#e0762f'], ['White', D.white_nh_pct, '#5b79b8'], ['Black', D.black_nh_pct, '#3f9b76'], ['Asian', D.asian_nh_pct, '#c9542c'.replace('c9542c','b6539f')], ['Other / two+', null, '#a7a298']];
+  <div class="legendline"><span><span class="sw"></span>${esc(nta.properties.ntaname).length>24?'this neighborhood':esc(nta.properties.ntaname)}</span><span><span class="mk"></span>citywide</span>${BORO?`<span>"boro" = ${esc(boro)}</span>`:''}</div>`;
+  const u18 = D.under18_pct ?? D.under18_pct_calc, sen = D.age65pl_pct ?? D.senior_pct_calc;
+  h += cmpScaled('People per square mile', D.density, CITY.density, 120000, fmt, BORO?.density);
+  h += cmpPct('Children (under 18)', u18, CITY.under18_pct, BORO?.under18_pct);
+  h += cmpPct('Seniors (65 and over)', sen, CITY.senior_pct, BORO?.senior_pct);
+  h += cmpScaled('Median household income', D.median_hh_income, CITY.median_hh_income, 160000, money, BORO?.median_hh_income);
+  h += cmpScaled('Median gross rent', D.median_rent, CITY.median_rent, 3500, money, BORO?.median_rent);
+  h += cmpPct('Foreign born', D.foreign_born_pct, CITY.foreign_born_pct, BORO?.foreign_born_pct);
+  h += cmpPct('Below poverty line', D.poverty_pct, CITY.poverty_pct, BORO?.poverty_pct);
+  h += cmpPct("Bachelor's degree or higher", D.bachelors_plus_pct, CITY.bachelors_plus_pct, BORO?.bachelors_plus_pct);
+  h += cmpPct('Limited English', D.limited_english_pct, CITY.limited_english_pct, BORO?.limited_english_pct);
+  h += cmpPct('Renters', D.renter_occ_pct, CITY.renter_occ_pct, BORO?.renter_occ_pct);
+  h += cmpPct('Rent burdened (30%+ of income)', D.rent_burdened_pct, CITY.rent_burdened_pct, BORO?.rent_burdened_pct);
+  const seg = [['Hispanic', D.hispanic_pct, '#e0762f'], ['White', D.white_nh_pct, '#5b79b8'], ['Black', D.black_nh_pct, '#3f9b76'], ['Asian', D.asian_nh_pct, '#b6539f'], ['Other / two+', null, '#a7a298']];
   const known = seg.slice(0,4).reduce((s,x)=>s+(+x[1]||0),0);
   seg[4][1] = Math.max(0, 100-known);
   h += `<div style="margin-top:12px"><div class="cmp"><div class="lab"><span>Race and ethnicity</span></div></div>
-    <div class="racebar">` + seg.map(s=>`<div style="width:${(+s[1]||0)}%;background:${s[2]}" title="${s[0]} ${pct(s[1])}"></div>`).join('') + `</div>
-    <div class="racekey">` + seg.map(s=>`<span><i style="background:${s[2]}"></i>${s[0]} ${pct(s[1])}</span>`).join('') + `</div></div>`;
+    <div class="racebar">`+seg.map(s=>`<div style="width:${(+s[1]||0)}%;background:${s[2]}" title="${s[0]} ${pct(s[1])}"></div>`).join('')+`</div>
+    <div class="racekey">`+seg.map(s=>`<span><i style="background:${s[2]}"></i>${s[0]} ${pct(s[1])}</span>`).join('')+`</div></div>`;
   if (D.mean_commute) h += row('Mean commute', `${D.mean_commute} minutes`);
-  h += `<div class="note">American Community Survey 2016-2020 five year estimates for neighborhood tabulation area ${esc(code)}. Small-area survey numbers carry real margins of error; treat differences of a few points as noise.</div></section>`;
+  h += `<div class="note">American Community Survey 2016-2020 five year estimates for neighborhood tabulation area ${esc(code)}; density uses City Planning land area. Small-area survey numbers carry real margins of error; treat differences of a few points as noise.</div></section>`;
   return h;
 }
-function cmpPct(label, v, cityv){
+function boroNote(bv, fmtfn){ return bv!=null ? `<span style="font-weight:400;color:#8a8f9e"> · boro ${fmtfn(bv)}</span>` : ''; }
+function cmpPct(label, v, cityv, borov){
   if (v==null) return '';
-  return `<div class="cmp"><div class="lab"><span>${label}</span><b>${pct(v)}</b></div>
+  return `<div class="cmp"><div class="lab"><span>${label}</span><b>${pct(v)}${boroNote(borov,pct)}</b></div>
     <div class="track"><div class="fill" style="width:${Math.min(100,v)}%"></div>
     <div class="citymark" style="left:${Math.min(100,cityv)}%" title="citywide ${pct(cityv)}"></div></div></div>`;
 }
-function cmpDollar(label, v, cityv, scale){
+function cmpScaled(label, v, cityv, scale, fmtfn, borov){
   if (v==null) return '';
-  return `<div class="cmp"><div class="lab"><span>${label}</span><b>${money(v)}</b></div>
+  return `<div class="cmp"><div class="lab"><span>${label}</span><b>${fmtfn(v)}${boroNote(borov,fmtfn)}</b></div>
     <div class="track"><div class="fill" style="width:${Math.min(100,v/scale*100)}%"></div>
-    <div class="citymark" style="left:${Math.min(100,cityv/scale*100)}%" title="citywide ${money(cityv)}"></div></div></div>`;
+    <div class="citymark" style="left:${Math.min(100,cityv/scale*100)}%" title="citywide ${fmtfn(cityv)}"></div></div></div>`;
+}
+
+/* ---------- 10 · read more ---------- */
+function readMoreBlock(nta, boro, bbl, zip){
+  const hood = nta ? nta.properties.ntaname.split('-')[0].split('(')[0].trim() : (boro || 'New York City');
+  const q = encodeURIComponent(`"${hood}" ${boro||'New York City'}`);
+  const wq = encodeURIComponent(hood + ', ' + (boro==='Manhattan'?'Manhattan':boro||'New York City'));
+  return `<section class="blk"><h3><span class="num">10</span> Go deeper</h3>
+    <div class="morelinks" style="margin-top:2px">
+      <a href="https://news.google.com/search?q=${q}" target="_blank" rel="noopener">${esc(hood)} in the news</a>
+      <a href="https://www.reddit.com/search/?q=${q}" target="_blank" rel="noopener">Reddit conversations</a>
+      <a href="https://en.wikipedia.org/wiki/Special:Search?search=${wq}" target="_blank" rel="noopener">Wikipedia</a>
+      <a href="https://www.thecity.nyc/search/?q=${encodeURIComponent(hood)}" target="_blank" rel="noopener">The City coverage</a>
+      <a href="https://gothamist.com/search?q=${encodeURIComponent(hood)}" target="_blank" rel="noopener">Gothamist coverage</a>
+      <a href="https://popfactfinder.planning.nyc.gov/" target="_blank" rel="noopener">Full census profile (Population FactFinder)</a>
+    </div>
+    <div class="note">Searches open prefilled on the outside site using the neighborhood name — skim with judgment.</div></section>`;
 }
 
 /* ---------- chrome ---------- */
-$('closepanel').addEventListener('click', () => { $('panel').classList.remove('open'); clearShape(); });
+$('closepanel').addEventListener('click', () => { $('panel').classList.remove('open'); clearShape(); clearPoi(); });
 $('aicaution').addEventListener('click', () => $('aipop').classList.toggle('show'));
 document.addEventListener('click', e => {
   if (!$('aipop').contains(e.target) && e.target !== $('aicaution')) $('aipop').classList.remove('show');
 });
-
-/* deep link */
 if (location.hash){
   const m = location.hash.slice(1).split(',').map(Number);
   if (m.length===2 && isFinite(m[0]) && isFinite(m[1])) ready.then(()=>inspect(m[0], m[1]));

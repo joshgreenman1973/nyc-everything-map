@@ -58,7 +58,17 @@ code{background:#efe9da; border-radius:4px; padding:1px 6px; font-size:13px}
 <tr><td>Hurricane evacuation zones</td><td><a href="https://data.cityofnewyork.us/Public-Safety/Hurricane-Evacuation-Zones/epne-qv9x">epne-qv9x</a></td></tr>
 <tr><td>Historic districts (designated only)</td><td><a href="https://data.cityofnewyork.us/Housing-Development/Historic-Districts/skyk-mpzq">skyk-mpzq</a></td></tr>
 </table>
-<p>All layers were downloaded June 9, 2026 and simplified with mapshaper (weighted Visvalingam, 2 meter interval) to keep the download reasonable. These are City Planning's shoreline-clipped files, so lookups stop at the water's edge.</p>
+<p>All layers were downloaded June 9, 2026 and simplified with mapshaper (weighted Visvalingam, 2 meter interval) to keep the download reasonable. These are City Planning's shoreline-clipped files, so lookups stop at the water's edge. The dimmed mask outside the city is the same neighborhood file dissolved into one outline.</p>
+
+<h3>Point datasets stored with the site</h3>
+<table>
+<tr><th>Data</th><th>Source</th><th>Notes</th></tr>
+<tr><td>Public schools (1,992 points)</td><td><a href="https://data.cityofnewyork.us/Education/2019-2020-School-Point-Locations/a3nt-yts4">a3nt-yts4</a> + <a href="https://data.cityofnewyork.us/Education/2017-18-2021-22-Demographic-Snapshot/c7ru-d68s">c7ru-d68s</a></td><td>Locations are the Department of Education's latest published point file (2019-20); enrollment and grade spans are 2021-22, the latest school-level snapshot on the open data portal. Schools opened or closed since then may be missing or stale — each school links to its live DOE page and InsideSchools profile.</td></tr>
+<tr><td>Individual landmarks (1,457 points)</td><td><a href="https://data.cityofnewyork.us/Housing-Development/Individual-Landmark-Sites/buis-pvji">buis-pvji</a></td><td>Designated sites only; each links to the Landmarks Preservation Commission designation report. Point shown is the site polygon's representative point.</td></tr>
+<tr><td>Subway stations (496)</td><td><a href="https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f">39hk-dx4f</a></td><td>Walk times assume 80 meters per minute in a straight line.</td></tr>
+<tr><td>Air quality</td><td><a href="https://data.cityofnewyork.us/Environment/Air-Quality/c3uy-2p5r">c3uy-2p5r</a></td><td>Fine particulate matter (PM2.5) and nitrogen dioxide (NO2) annual averages for 2023 at the community district level, with citywide values for comparison, from the city's Community Air Survey.</td></tr>
+<tr><td>Heat vulnerability index</td><td><a href="https://data.cityofnewyork.us/Health/Heat-Vulnerability-Index-Rankings/4mhf-duep">4mhf-duep</a></td><td>Health department ranking by ZIP code tabulation area, 1 (least vulnerable in heat waves) to 5 (most).</td></tr>
+</table>
 
 <h3>Accuracy check</h3>
 <p>The lookup machinery was validated against city records that carry both coordinates and an official district label:</p>
@@ -84,6 +94,7 @@ code{background:#efe9da; border-radius:4px; padding:1px 6px; font-size:13px}
 <li>Race and ethnicity categories are mutually exclusive: Hispanic of any race, then non-Hispanic white, Black and Asian alone; "other / two+" is the remainder.</li>
 <li>These are survey estimates with real margins of error, larger in small neighborhoods. Differences of a few percentage points between a neighborhood and the city may not be meaningful.</li>
 <li>Parks, airports, cemeteries and other special-use areas are flagged instead of profiled.</li>
+<li>Population density divides ACS population by City Planning's land area for each neighborhood tabulation area (water excluded). Children and senior shares are the under-18 and 65-and-over percentages from the same ACS tables. Citywide and borough comparison values for all three come from the same 2016-2020 vintage; borough density uses the summed land area of that borough's neighborhoods.</li>
 </ul>
 
 <h2>Live feeds</h2>
@@ -93,12 +104,21 @@ code{background:#efe9da; border-radius:4px; padding:1px 6px; font-size:13px}
 <tr><td>311 complaints</td><td><a href="https://data.cityofnewyork.us/Social-Services/311-Service-Requests-from-2010-to-Present/erm2-nwe9">erm2-nwe9</a></td><td>Created in the last 90 days within 250 meters of the point, grouped by complaint type.</td></tr>
 <tr><td>Crime complaints</td><td><a href="https://data.cityofnewyork.us/Public-Safety/NYPD-Complaint-Data-Current-Year-To-Date-/5uac-w243">NYPD complaint data, year to date (5uac-w243)</a></td><td>Reported since January 1 of the current year (dated by report date, not occurrence date) within 500 meters. Note that complaint counts reflect both crime and reporting behavior, the circle ignores neighborhood lines, and the police department withholds or blurs coordinates for certain offenses, notably sex crimes, so sensitive categories are undercounted in any radius search.</td></tr>
 <tr><td>Restaurant grades</td><td><a href="https://data.cityofnewyork.us/Health/DOHMH-New-York-City-Restaurant-Inspection-Results/43nn-pn8j">43nn-pn8j</a></td><td>Latest posted letter grade per restaurant within 200 meters, from inspections in the last two years.</td></tr>
+<tr><td>New restaurants</td><td>same dataset</td><td>Places within 500 meters whose first-ever inspection happened in the last nine months — a proxy for openings, since the health department does not publish an openings list. A long-running restaurant that somehow escaped inspection would appear "new"; that is rare.</td></tr>
+<tr><td>Traffic crashes</td><td><a href="https://data.cityofnewyork.us/Public-Safety/Motor-Vehicle-Collisions-Crashes/h9gi-nx95">h9gi-nx95</a></td><td>Police-reported crashes within 250 meters in the last 12 months, with injury and fatality totals.</td></tr>
+<tr><td>Street trees</td><td><a href="https://data.cityofnewyork.us/Environment/Forestry-Tree-Points/hn5i-inap">hn5i-inap</a></td><td>The parks department's live street tree inventory: count and most common species within 200 meters.</td></tr>
+<tr><td>Open housing violations</td><td><a href="https://data.cityofnewyork.us/Housing-Development/Housing-Maintenance-Code-Violations/wvxf-dwi5">wvxf-dwi5</a></td><td>Open Housing Preservation and Development violations for the looked-up tax lot, by class (C is most serious). Shown only for lots with residential units.</td></tr>
+<tr><td>Construction and demolition</td><td><a href="https://data.cityofnewyork.us/Housing-Development/DOB-NOW-Build-Job-Application-Filings/w9ak-ipjd">w9ak-ipjd</a></td><td>New building and full demolition job filings in the surrounding neighborhood tabulation area in the last 12 months. Filings are intentions, not completions.</td></tr>
+<tr><td>Newly licensed businesses</td><td><a href="https://data.cityofnewyork.us/Business/Legally-Operating-Businesses/w7w3-xahh">w7w3-xahh</a></td><td>Department of Consumer and Worker Protection licenses created in the last 12 months within a roughly 400 meter box. This covers licensed trades only (contractors, garages, secondhand dealers and the like), not every storefront; there is no comprehensive public openings-and-closings feed.</td></tr>
+<tr><td>Film and television shoots</td><td><a href="https://data.cityofnewyork.us/City-Government/Film-Permits/tg4x-b46p">tg4x-b46p</a></td><td>Shooting permits matching the point's ZIP code in the last six months. The city updates this dataset irregularly, so the newest shoots may be missing.</td></tr>
+<tr><td>Nearby Wikipedia articles</td><td><a href="https://www.mediawiki.org/wiki/Extension:GeoData">Wikipedia GeoData API</a></td><td>Articles geotagged within 800 meters, nearest first. Coverage and accuracy are whatever Wikipedia editors have tagged.</td></tr>
+<tr><td>Elevation</td><td><a href="https://www.usgs.gov/3d-elevation-program">United States Geological Survey elevation point query service</a></td><td>Ground elevation at the clicked point, shown in feet.</td></tr>
 </table>
+<p>Live sections load as you scroll to them rather than all at once, to be polite to the city's servers. Everything is shown with its vintage; if a feed is briefly unavailable the panel says so.</p>
 <p>Live queries hit NYC Open Data without an application token, which the city rate-limits but allows. If a feed is briefly unavailable the panel says so rather than showing stale numbers.</p>
 
 <h2>Other lookups</h2>
 <ul>
-<li><b>Subway:</b> station locations and routes from the <a href="https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f">Metropolitan Transportation Authority stations file</a> (496 stations including Staten Island Railway). Walk times assume 80 meters per minute in a straight line, so real walks are a bit longer.</li>
 <li><b>Hurricane zones:</b> the city's six evacuation zones, shown as published. The source file also contains two codes ("X" and "7") for territory outside any evacuation zone — "X" for most upland areas and "7" for certain large parks. The map shows both as "not in an evacuation zone," matching the official <a href="https://finder.nyc.gov/hurricane">Know Your Zone finder</a>, which shows no zone for those areas.</li>
 <li><b>School zone links</b> go to the Department of Education page for each school's code. Zone files are for 2024-2025; zones change, and some districts use choice systems with no zoned school.</li>
 <li><b>Precinct links:</b> all 78 generated precinct page links (including the new 116th Precinct in Queens) were verified to resolve on nyc.gov.</li>

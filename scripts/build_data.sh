@@ -68,6 +68,9 @@ out = [[s['stop_name'], s['daytime_routes'], round(float(s['gtfs_latitude']),5),
 json.dump(out, open('subway.json','w'), ensure_ascii=False)
 PY
 
+# ------------------------------------------------- 4b. schools, landmarks, environment
+python3 ../../scripts/bake_extras.py
+
 # ---------------------------------------------------------------- 5. publish
 cd ../..
 cp data/out/*.json docs/data/
