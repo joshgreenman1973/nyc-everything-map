@@ -170,5 +170,33 @@ def elections():
     json.dump(d, open(f'{OUT}/elections.json', 'w'))
     print(len(d['features']), 'election districts')
 
+def neighborhoods_project():
+    """Map Rob Stephenson's The Neighborhoods Substack posts to neighborhoods.
+    He publishes weekly; rerun to pick up new profiles."""
+    import re, unicodedata
+    posts, offset = [], 0
+    while offset <= 600:
+        req = urllib.request.Request(
+            f'https://theneighborhoods.substack.com/api/v1/archive?sort=new&limit=50&offset={offset}',
+            headers={'User-Agent': 'Mozilla/5.0'})
+        batch = json.load(urllib.request.urlopen(req))
+        if not batch: break
+        posts.extend(batch); offset += 50
+    boros = {'manhattan': 'Manhattan', 'brooklyn': 'Brooklyn', 'queens': 'Queens',
+             'the bronx': 'Bronx', 'bronx': 'Bronx', 'staten island': 'Staten Island'}
+    def norm(s):
+        s = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode()
+        return re.sub(r'[^a-z0-9]+', ' ', s.lower()).strip()
+    out = {}
+    for p in posts:  # newest first, so the oldest (Part I) wins on overwrite
+        if p.get('audience') != 'everyone' or not p.get('title'): continue
+        m = re.match(r'^(.*?)\s*[-–—]\s*(Manhattan|Brooklyn|Queens|The Bronx|Bronx|Staten Island)\s*(?:\(Part\s+[IVX\d]+\))?\s*$',
+                     p['title'].strip(), re.I)
+        if not m: continue
+        name = m.group(1).strip()
+        out.setdefault(boros[m.group(2).lower()], {})[norm(name)] = [p['canonical_url'], name]
+    json.dump(out, open(f'{OUT}/neighborhoods_project.json', 'w'), ensure_ascii=False)
+    print(sum(len(v) for v in out.values()), 'neighborhood profiles mapped')
+
 if __name__ == '__main__':
-    schools(); school_quality(); landmarks(); airquality(); hvi(); density_fields(); cityoutline(); busstops(); elections()
+    schools(); school_quality(); landmarks(); airquality(); hvi(); density_fields(); cityoutline(); busstops(); elections(); neighborhoods_project()

@@ -279,7 +279,7 @@ fetch('data/cityoutline.json').then(r=>r.json()).then(gj => {
 const $ = id => document.getElementById(id);
 const LAYERS = {}, DATA = {};
 const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections'];
-const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops'];
+const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project'];
 let loaded = 0, totalFiles = LAYER_FILES.length + DATA_FILES.length;
 function tick(){
   loaded++;
@@ -1299,7 +1299,9 @@ async function fetchLore(ctx){
       <span class="n">${walkmin(l.d)} min</span></li>`).join('')+`</ul>`;
   } else h += `<div class="note" style="margin:0 0 6px">No designated individual landmark within about a 30 minute walk.</div>`;
   h += `<div class="subhead">Nearby on Wikipedia</div><div id="wiki"><span class="spin"></span></div>`;
+  const np = neighborhoodsProjectLink(ctx.nta);
   h += morelinks([
+    np && [np.url, `${np.name} in The Neighborhoods (Rob Stephenson)`],
     ['https://joshgreenman1973.github.io/nyc-three-eras/', 'This address in 1940 and the 1980s'],
     ['https://80s.nyc/', '1980s street view (80s.nyc)'],
     ['https://www.oldnyc.org/', 'Old photos by location (OldNYC)'],
@@ -1324,6 +1326,22 @@ async function fetchLore(ctx){
       li.addEventListener('mouseleave', clearPoi);
     });
   }catch(e){ if(!stale(ctx)&&$('wiki')) $('wiki').innerHTML='<span class="errnote">Wikipedia unavailable right now.</span>'; }
+}
+
+/* The Neighborhoods project (Rob Stephenson) — link when the neighborhood is covered */
+function npNorm(s){
+  return s.normalize('NFKD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+}
+function neighborhoodsProjectLink(nta){
+  if (!nta || !DATA.neighborhoods_project) return null;
+  const byBoro = DATA.neighborhoods_project[nta.properties.boroname];
+  if (!byBoro) return null;
+  const full = nta.properties.ntaname.replace(/\([^)]*\)/g,'');
+  for (const cand of [full, ...full.split('-')]){
+    const hit = byBoro[npNorm(cand)];
+    if (hit) return {url: hit[0], name: hit[1]};
+  }
+  return null;
 }
 
 /* ---------- 9 · demographics ---------- */
