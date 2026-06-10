@@ -279,7 +279,7 @@ fetch('data/cityoutline.json').then(r=>r.json()).then(gj => {
 const $ = id => document.getElementById(id);
 const LAYERS = {}, DATA = {};
 const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections'];
-const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project'];
+const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals'];
 let loaded = 0, totalFiles = LAYER_FILES.length + DATA_FILES.length;
 function tick(){
   loaded++;
@@ -567,6 +567,7 @@ async function inspect(lat, lng, geoFeature=null){
   html += `<div class="subhead">Nearest public schools</div>${nearestSchools(lat,lng)}
   <div class="note" style="margin-bottom:4px">Zones are 2024-2025; locations are the Department of Education's latest published point file (2019-20) with 2021-22 enrollment — confirm with MySchools before enrolling. School links go to the DOE page; "profile" links go to InsideSchools.</div>`;
   html += `<div class="subhead">Getting around</div>` + subwayHtml(lat,lng) + busHtml(lat,lng) + `<div id="bike"></div>`;
+  html += `<div class="subhead">Health</div>` + hospitalHtml(lat,lng);
   if (dsny) html += row('Sanitation district', `${esc(dsny.properties.district)}<span class="meta">Department of Sanitation collection district</span>`, 'dsny');
   html += `<div id="c311" style="margin-top:10px"><span class="spin"></span> 311 complaints…</div>
     <div id="food" style="margin-top:12px"><span class="spin"></span> Restaurant grades…</div>
@@ -732,6 +733,21 @@ function nearestSchools(lat,lng){
         ${q?`<span class="sub">${q}</span>`:''}</span>
       <span class="n">${walkmin(s.d)} min</span></li>`;
   }).join('') + `</ul>`;
+}
+function hospitalHtml(lat,lng){
+  const all = DATA.hospitals.map(h => ({name:h[0], lat:h[1], lng:h[2], er:h[3], type:h[4], d:haversine(lat,lng,h[1],h[2])}))
+    .sort((a,b)=>a.d-b.d);
+  const nearest = all[0];
+  const nearestEr = all.find(h => h.er);
+  if (!nearest) return '';
+  const miles = m => m < 1100 ? walkmin(m) + ' min walk' : (m/1609.34).toFixed(1) + ' mi';
+  const li = (h, label) => `<li class="poi" data-lat="${h.lat}" data-lng="${h.lng}" data-name="${esc(h.name)}">
+    <span>${label}: ${esc(h.name)}<span class="sub">${h.er?'has an emergency room':'no general emergency room'}${h.type&&h.type!=='Acute Care'?' · '+esc(h.type.toLowerCase()):''}</span></span>
+    <span class="n">${miles(h.d)}</span></li>`;
+  let h = `<ul class="toplist">` + li(nearest, 'Closest hospital');
+  if (nearestEr && nearestEr !== nearest) h += li(nearestEr, 'Closest emergency room');
+  h += `</ul><div class="note" style="margin:0 0 4px">Straight-line distances. Emergency status from Medicare's hospital file; multi-campus systems can appear once, at their main campus — in an emergency call 911, which routes to the right place.</div>`;
+  return h;
 }
 function busHtml(lat,lng){
   const near = DATA.busstops.map(s => ({name:s[0],routes:s[1],lat:s[2],lng:s[3],d:haversine(lat,lng,s[2],s[3])}))

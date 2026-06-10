@@ -198,5 +198,32 @@ def neighborhoods_project():
     json.dump(out, open(f'{OUT}/neighborhoods_project.json', 'w'), ensure_ascii=False)
     print(sum(len(v) for v in out.values()), 'neighborhood profiles mapped')
 
+def hospitals():
+    """NYC hospitals with emergency-service flags from CMS Hospital General
+    Information, geocoded via GeoSearch. Two intersection-style addresses
+    (Jamaica and Flushing hospitals) need the street-address overrides below."""
+    url = ('https://data.cms.gov/provider-data/api/1/datastore/query/xubh-q36u/0'
+           '?conditions%5B0%5D%5Bproperty%5D=state&conditions%5B0%5D%5Bvalue%5D=NY&limit=500')
+    rows = json.load(urllib.request.urlopen(url))['results']
+    nyc = [r for r in rows if (r.get('countyparish') or '').upper()
+           in {'NEW YORK', 'KINGS', 'QUEENS', 'BRONX', 'RICHMOND'}]
+    overrides = {'JAMAICA HOSPITAL MEDICAL CENTER': '8900 Van Wyck Expressway, Jamaica, NY 11418',
+                 'FLUSHING HOSPITAL MEDICAL CENTER': '4500 Parsons Boulevard, Flushing, NY 11355'}
+    out = []
+    for r in nyc:
+        addr = overrides.get(r['facility_name'], f"{r['address']}, {r['citytown']}, NY {r['zip_code']}")
+        gu = 'https://geosearch.planninglabs.nyc/v2/search?' + urllib.parse.urlencode({'text': addr, 'size': 1})
+        feats = json.load(urllib.request.urlopen(gu)).get('features', [])
+        if not feats:
+            print('  GEOCODE MISS:', r['facility_name']); continue
+        lng, lat = feats[0]['geometry']['coordinates']
+        name = (r['facility_name'].title().replace("'S", "'s").replace('Nyc', 'NYC')
+                .replace('Nyu', 'NYU').replace(' Of ', ' of ').replace(' And ', ' and '))
+        out.append([name, round(lat, 5), round(lng, 5),
+                    1 if r['emergency_services'] == 'Yes' else 0,
+                    (r.get('hospital_type') or '').replace(' Hospitals', '')])
+    json.dump(out, open(f'{OUT}/hospitals.json', 'w'), ensure_ascii=False)
+    print(len(out), 'hospitals,', sum(1 for h in out if h[3]), 'with emergency services')
+
 if __name__ == '__main__':
-    schools(); school_quality(); landmarks(); airquality(); hvi(); density_fields(); cityoutline(); busstops(); elections(); neighborhoods_project()
+    schools(); school_quality(); landmarks(); airquality(); hvi(); density_fields(); cityoutline(); busstops(); elections(); neighborhoods_project(); hospitals()
