@@ -136,6 +136,14 @@ section.blk:last-of-type{border-bottom:0}
 .cmpclose:hover{background:var(--gold)}
 .cmpclear{text-decoration:underline; cursor:pointer; font-weight:600}
 
+/* bivariate map legend */
+#bivlegend{position:absolute; z-index:1003; top:70px; right:16px; background:var(--white); border:2px solid var(--ink);
+  border-radius:12px; padding:14px 16px; box-shadow:var(--shadow); font:600 12px 'Archivo'; max-width:240px}
+#bivlegend b{font-family:'Fraunces',serif; font-size:14px; display:block; padding-right:24px}
+#bivclose{position:absolute; top:8px; right:8px; width:24px; height:24px; border-radius:50%;
+  border:1.5px solid var(--ink); background:var(--white); cursor:pointer; font:700 12px/1 'Archivo'}
+#bivclose:hover{background:var(--gold)}
+
 /* table of contents */
 .toc{display:flex; flex-wrap:wrap; gap:6px; padding:12px 26px 12px; background:var(--paper-deep); border-bottom:1.5px solid var(--line)}
 .toc a{font:700 11px 'Archivo'; letter-spacing:.02em; padding:5px 11px; border-radius:999px; cursor:pointer;
@@ -287,9 +295,10 @@ function tick(){
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
+const DATA_VERSION = '6'; // bump when files in data/ change, so cached copies refresh
 const ready = Promise.all([
-  ...LAYER_FILES.map(f => fetch(`data/${f}.json`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
-  ...DATA_FILES.map(f => fetch(`data/${f}.json`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
+  ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
+  ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
 ]).catch(e => { $('loadmsg').textContent = 'Some data failed to load — try refreshing.'; console.error(e); });
 
 /* ---------- point-in-polygon ---------- */
@@ -483,7 +492,7 @@ async function inspect(lat, lng, geoFeature=null){
   </div>`;
 
   /* ----- table of contents ----- */
-  const TOC = [['place','The place'],['people','Who represents it'],['living','Living here'],['safety','Safety'],['lot','Lot & housing'],['changing','What’s changing'],['lore','Lore'],['numbers','By the numbers']];
+  const TOC = [['place','The place'],['people','Who represents it'],['living','Living here'],['safety','Safety'],['lot','Lot & housing'],['changing','What’s changing'],['lore','Lore'],['numbers','By the numbers'],['crossed','Two factors']];
   html += `<nav class="toc">`+TOC.map(([id,label])=>`<a data-sec="sec-${id}">${label}</a>`).join('')+`</nav>`;
 
   /* ----- 1 · the place ----- */
@@ -528,7 +537,7 @@ async function inspect(lat, lng, geoFeature=null){
   }
   if (cong){
     const d = String(+cong.properties.cong_dist), m = O.congress[d];
-    html += row('United States House', m ? `${esc(m.name)}${partyTag(m.party)}<span class="meta">New York's ${ordinal(d)} congressional district</span>` : `District ${d}`, 'congress');
+    html += row('United States House', m ? `${m.link?`<a href="${esc(m.link)}" target="_blank" rel="noopener">${esc(m.name)}</a>`:esc(m.name)}${partyTag(m.party)}<span class="meta">New York's ${ordinal(d)} congressional district</span>` : `District ${d}`, 'congress');
   }
   if (sen){
     const d = String(+sen.properties.st_sen_dist), m = O.senate[d];
@@ -536,7 +545,7 @@ async function inspect(lat, lng, geoFeature=null){
   }
   if (asm){
     const d = String(+asm.properties.assembly_district), m = O.assembly[d];
-    html += row('State Assembly', m ? `${esc(m.name)}${partyTag(m.party)}<span class="meta">District ${d}</span>` : `District ${d}`, 'assembly');
+    html += row('State Assembly', m ? `<a href="https://nyassembly.gov/mem/?ad=${d.padStart(3,'0')}" target="_blank" rel="noopener">${esc(m.name)}</a>${partyTag(m.party)}<span class="meta">District ${d}</span>` : `District ${d}`, 'assembly');
   }
   html += row('Mayor', `${esc(O.citywide.mayor.name)}${partyTag(O.citywide.mayor.party)}`);
   html += row('Public advocate', `${esc(O.citywide.public_advocate.name)}${partyTag(O.citywide.public_advocate.party)}`);
@@ -545,17 +554,15 @@ async function inspect(lat, lng, geoFeature=null){
   const edFeat = lookup(LAYERS.elections, lat, lng);
   if (edFeat){
     const e = edFeat.properties;
-    html += `<div class="subhead">How this election district voted in 2025</div>`;
-    if (e.g_win) html += row('Mayoral general', `${esc(e.g_win.split(' ').pop())} ${pct(e.g_pct)}<span class="meta">Mamdani ${pct(e.g_mamdani)} · Cuomo ${pct(e.g_cuomo)} · Sliwa ${pct(e.g_sliwa)} · ${fmt(e.g_ballots)} ballots</span>`, 'elections');
-    if (e.p_win) html += row('Democratic primary (final round)', `${esc(e.p_win.split(' ').pop())} ${pct(e.p_pct)}<span class="meta">Mamdani ${pct(e.p_mamdani)} · Cuomo ${pct(e.p_cuomo)} · ${fmt(e.p_ballots)} ballots</span>`, 'elections');
-    html += `<div class="note" style="margin:2px 0 8px">Election district ${esc(e.ed)} — a few square blocks, so small numbers; primary shows the final ranked-choice round.</div>`;
+    html += `<div class="subhead">How this election district voted</div>`;
+    if (e.g_win) html += row('2025 mayoral general', `${esc(e.g_win.split(' ').pop())} ${pct(e.g_pct)}<span class="meta">Mamdani ${pct(e.g_mamdani)} · Cuomo ${pct(e.g_cuomo)} · Sliwa ${pct(e.g_sliwa)} · ${fmt(e.g_ballots)} ballots</span>`, 'elections');
+    if (e.p_win) html += row('2025 Democratic primary (final round)', `${esc(e.p_win.split(' ').pop())} ${pct(e.p_pct)}<span class="meta">Mamdani ${pct(e.p_mamdani)} · Cuomo ${pct(e.p_cuomo)} · ${fmt(e.p_ballots)} ballots</span>`, 'elections');
+    if (e.x_total) html += row('2024 presidential', `${e.x_harris >= e.x_trump ? 'Harris '+pct(e.x_harris) : 'Trump '+pct(e.x_trump)}<span class="meta">Harris ${pct(e.x_harris)} · Trump ${pct(e.x_trump)} · ${fmt(e.x_total)} votes (citywide: Harris 69.0)</span>`, 'elections');
+    html += `<div class="note" style="margin:2px 0 8px">Election district ${esc(e.ed)} — a few square blocks, so small numbers; the primary shows the final ranked-choice round. Certified Board of Elections results; districts the board combined may be missing a year.</div>`;
   }
-  const ad = asm ? String(+asm.properties.assembly_district) : null;
   html += morelinks([
     ['https://findmypollsite.vote.nyc/', 'Find your poll site'],
     ['https://vote.nyc/', 'Register to vote'],
-    ['https://joshgreenman1973.github.io/nyc-election-archive/', 'How this area voted (mayoral primaries)'],
-    ad && [`https://nyassembly.gov/mem/?ad=${ad.padStart(3,'0')}`, 'Assembly member page'],
   ]);
   html += `<div class="note">Officeholders as of June 2026, from the City Council, the unitedstates legislators project and Open States.</div></section>`;
 
@@ -590,7 +597,9 @@ async function inspect(lat, lng, geoFeature=null){
   html += lazySection(7, 'Landmarks and lore', 'lore', 'sec-lore');
   /* ----- 8 · neighborhood numbers ----- */
   html += demographicsBlock(nta, boro);
-  /* ----- 9 · read more ----- */
+  /* ----- 9 · crossed indicators ----- */
+  html += crossedBlock(nta);
+  /* ----- 10 · read more ----- */
   html += readMoreBlock(nta, boro, bbl, zip);
 
   html += `<div class="pfoot">Boundaries and demographics: New York City Department of City Planning and the United States Census Bureau (American Community Survey 2016-2020). Live feeds: NYC Open Data. Lookups are point-in-polygon against simplified boundaries — addresses sitting exactly on a district line can resolve to the neighbor. <a href="methodology.html">How this all works →</a></div>`;
@@ -615,6 +624,9 @@ async function inspect(lat, lng, geoFeature=null){
   // TOC jump links
   document.querySelectorAll('#panelbody .toc a').forEach(a =>
     a.addEventListener('click', () => document.getElementById(a.dataset.sec)?.scrollIntoView({behavior:'smooth', block:'start'})));
+  // bivariate preset map links
+  document.querySelectorAll('#panelbody a[data-biv]').forEach(a =>
+    a.addEventListener('click', e => { e.preventDefault(); showBivMap(+a.dataset.biv); }));
 
   fetchElevation(lat,lng);
   const ctx = {lat,lng,bbl,revDist,revFailed,nta,zip,precinct: pp ? +pp.properties.precinct : null,token:Symbol()};
@@ -699,6 +711,86 @@ function renderCompare(A, B){
     <div class="note" style="margin-top:10px">Demographics: American Community Survey 2016-2020 by neighborhood. Crime and 311 lines appear only if those sections loaded for both points (scroll to the safety section first). <span class="cmpclear">Clear comparison</span></div>`;
   $('comparewrap').style.display = 'flex';
   document.querySelector('.cmpclear').onclick = () => { comparePin = null; $('comparewrap').style.display='none'; $('comparebtn') && ($('comparebtn').textContent='⇄ Compare'); };
+}
+
+/* ============================== crossed (bivariate) indicators ============================== */
+const BIV_PRESETS = [
+  {name:'Income × violent street crime', a:['Median income', d=>d.median_hh_income, money], b:['Violent crime per 1,000 residents', d=>d.pop>200&&d.vcrime_n!=null?d.vcrime_n/d.pop*1000:null, v=>v.toFixed(1)], note:'Crime: outdoor assault, robbery and murder, Jan 2024 to Mar 2026.'},
+  {name:'Density × air quality', a:['People per square mile', d=>d.density, fmt], b:['Fine particles (PM2.5)', d=>d.pm25, v=>v+' µg/m³'], note:'Air quality is the surrounding community district\'s 2023 annual average.'},
+  {name:'Rent burden × evictions', a:['Rent burdened households', d=>d.rent_burdened_pct, pct], b:['Evictions per 1,000 renter households', d=>d.renter_occ>100&&d.evic_n!=null?d.evic_n/d.renter_occ*1000:null, v=>v.toFixed(1)], note:'Marshal-executed evictions, last 24 months — filings are far more numerous.'},
+  {name:'Poverty × children', a:['Below poverty line', d=>d.poverty_pct, pct], b:['Children under 18', d=>d.under18_pct ?? d.under18_pct_calc, pct], note:'Where both are high, child poverty concentrates.'},
+  {name:'Foreign born × limited English', a:['Foreign born', d=>d.foreign_born_pct, pct], b:['Limited English', d=>d.limited_english_pct, pct], note:'High-high areas need language access in city services most.'},
+  {name:'New construction × rent', a:['New building filings per square mile', d=>d.land_sqmi?d.newbuild_n/d.land_sqmi:null, v=>v.toFixed(1)], b:['Median gross rent', d=>d.median_rent, money], note:'Filings are the last 12 months; rent is the 2016-2020 survey.'},
+  {name:'Seniors × poverty', a:['Seniors (65 and over)', d=>d.age65pl_pct ?? d.senior_pct_calc, pct], b:['Below poverty line', d=>d.poverty_pct, pct], note:'Where both are high, older New Yorkers are aging in place with thin resources.'},
+  {name:'Income × education', a:['Median income', d=>d.median_hh_income, money], b:["Bachelor's degree or higher", d=>d.bachelors_plus_pct, pct], note:'Off-diagonal neighborhoods — educated but lower-income or the reverse — are the interesting ones.'},
+];
+const BIV_COLORS = ['#e8e8e8','#ace4e4','#5ac8c8','#dfb0d6','#a5add3','#5698b9','#be64ac','#8c62aa','#3b4994'];
+const TIERWORD = ['low','mid','high'];
+let _bivCuts = null, bivLayer = null;
+function bivCuts(){
+  if (_bivCuts) return _bivCuts;
+  _bivCuts = BIV_PRESETS.map(p => ['a','b'].map(side => {
+    const vals = Object.values(DATA.nta_demographics)
+      .map(d => p[side][1](d)).filter(v => v!=null && isFinite(v)).sort((x,y)=>x-y);
+    return [vals[Math.floor(vals.length/3)], vals[Math.floor(vals.length*2/3)]];
+  }));
+  return _bivCuts;
+}
+function bivTier(v, cuts){ return v==null||!isFinite(v) ? null : v <= cuts[0] ? 0 : v <= cuts[1] ? 1 : 2; }
+function crossedBlock(nta){
+  if (!nta) return '';
+  const D = DATA.nta_demographics[nta.properties.nta2020];
+  if (!D || !D.pop || D.pop < 200) return '';
+  const cuts = bivCuts();
+  let rows = '';
+  BIV_PRESETS.forEach((p, i) => {
+    const va = p.a[1](D), vb = p.b[1](D);
+    const ta = bivTier(va, cuts[i][0]), tb = bivTier(vb, cuts[i][1]);
+    if (ta==null || tb==null) return;
+    const sw = BIV_COLORS[ta*3+tb];
+    rows += `<li><span><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:${sw};border:1px solid #999;margin-right:7px;vertical-align:-1px"></i>${p.name}
+      <span class="sub">${TIERWORD[ta]} (${p.a[2](va)}) · ${TIERWORD[tb]} (${p.b[2](vb)})</span></span>
+      <span class="n"><a href="#" data-biv="${i}">map →</a></span></li>`;
+  });
+  if (!rows) return '';
+  // the lighting × crime hex map lives on its own site
+  rows += `<li><span><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#3b4994;border:1px solid #999;margin-right:7px;vertical-align:-1px"></i>Street lighting complaints × violent crime
+    <span class="sub">block-level class shown in the safety chapter</span></span>
+    <span class="n"><a href="https://vitalcity-nyc.github.io/bivariate-lighting-crime/" target="_blank" rel="noopener">map ↗</a></span></li>`;
+  return `<section class="blk" id="sec-crossed"><h3><span class="num">9</span> Two factors at once</h3>
+    <ul class="toplist" style="margin-top:0">${rows}</ul>
+    <div class="note">Each pairing classes this neighborhood low, mid or high on two indicators at once (terciles across all neighborhoods). "Map" paints the whole city by that pairing so you can see where this point sits in the pattern. Crossing two indicators shows correlation, not cause.</div></section>`;
+}
+function showBivMap(i){
+  clearBivMap();
+  const p = BIV_PRESETS[i], cuts = bivCuts()[i];
+  bivLayer = L.geoJSON(LAYERS.nta, {style: f => {
+    const D = DATA.nta_demographics[f.properties.nta2020] || {};
+    const ta = bivTier(p.a[1](D), cuts[0]), tb = bivTier(p.b[1](D), cuts[1]);
+    if (ta==null || tb==null || !D.pop || D.pop < 200) return {weight:.4, color:'#999', fillColor:'#f3f0e8', fillOpacity:.5};
+    return {weight:.4, color:'#777', fillColor: BIV_COLORS[ta*3+tb], fillOpacity:.78};
+  }, onEachFeature: (f, l) => {
+    const D = DATA.nta_demographics[f.properties.nta2020] || {};
+    const va = p.a[1](D), vb = p.b[1](D);
+    if (va!=null && vb!=null) l.bindTooltip(`${f.properties.ntaname}: ${p.a[2](va)} · ${p.b[2](vb)}`, {sticky:true});
+    l.on('click', e => inspect(e.latlng.lat, e.latlng.lng));
+  }}).addTo(map);
+  const cells = [6,7,8,3,4,5,0,1,2].map(k=>`<div style="width:20px;height:20px;background:${BIV_COLORS[k]}"></div>`).join('');
+  const lg = document.createElement('div');
+  lg.id = 'bivlegend';
+  lg.innerHTML = `<button id="bivclose" title="Close">×</button><b>${p.name}</b>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:7px">
+      <span style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:9.5px">${p.a[0]} →</span>
+      <div style="display:grid;grid-template-columns:repeat(3,20px);gap:1.5px">${cells}</div>
+    </div>
+    <div style="font-size:9.5px;margin-top:4px;margin-left:22px">${p.b[0]} →</div>
+    <div style="font-size:10px;color:#666;margin-top:6px;max-width:200px">${p.note} Hover any neighborhood for its values.</div>`;
+  document.body.appendChild(lg);
+  $('bivclose').onclick = clearBivMap;
+}
+function clearBivMap(){
+  if (bivLayer){ map.removeLayer(bivLayer); bivLayer = null; }
+  $('bivlegend')?.remove();
 }
 function lazySection(num, title, key, secId){
   return `<section class="blk" data-lazy="${key}"${secId?` id="${secId}"`:''}><h3><span class="num">${num}</span> ${title}</h3>
@@ -1454,7 +1546,7 @@ function cmpScaled(label, v, cityv, scale, fmtfn, borov){
 function readMoreBlock(nta, boro, bbl, zip){
   const hood = nta ? nta.properties.ntaname.split('-')[0].split('(')[0].trim() : (boro || 'New York City');
   const q = encodeURIComponent(`"${hood}" ${boro||'New York City'}`);
-  return `<section class="blk"><h3><span class="num">9</span> What people are saying</h3>
+  return `<section class="blk"><h3><span class="num">10</span> What people are saying</h3>
     <div class="morelinks" style="margin-top:2px">
       <a href="https://news.google.com/search?q=${q}" target="_blank" rel="noopener">${esc(hood)} in the news</a>
       <a href="https://www.reddit.com/search/?q=${q}" target="_blank" rel="noopener">Reddit conversations</a>

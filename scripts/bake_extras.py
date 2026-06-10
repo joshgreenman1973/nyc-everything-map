@@ -285,3 +285,14 @@ def lightcrime():
 
 if __name__ == '__main__':
     schools(); school_quality(); landmarks(); airquality(); hvi(); density_fields(); cityoutline(); busstops(); elections(); neighborhoods_project(); hospitals(); lightcrime()
+
+# NOTE: two additional one-time merges live in git history (June 2026) and should
+# be folded into functions here on the next data refresh:
+# 1. pres24: certified BOE 2024 presidential ED-level CSV (vote.nyc) parsed with
+#    fusion lines summed, merged into docs/data/elections.json as x_harris /
+#    x_trump / x_total keyed on AD*1000+ED.
+# 2. nta indicators for the crossed-indicators presets: vcrime_n (summed from the
+#    bivariate lighting-crime hexes by NTA name), evic_n (evictions last 24 months,
+#    point-assigned to NTAs), newbuild_n (DOB NOW New Building filings, 12 months,
+#    by NTA name) and pm25 (community district 2023 annual average via CDTA code),
+#    merged into docs/data/nta_demographics.json.
