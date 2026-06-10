@@ -568,16 +568,19 @@ async function inspect(lat, lng, geoFeature=null){
 
   /* ----- 3 · living here ----- */
   html += `<section class="blk" id="sec-living"><h3><span class="num">3</span> Living here</h3>`;
+  // mobility first (the most universal daily need), then education, health, faith, then block conditions
+  html += `<div class="subhead" style="margin-top:0">Getting around</div>` + subwayHtml(lat,lng) + busHtml(lat,lng) + `<div id="bike"></div>`;
+  html += `<div class="subhead">Schools</div>`;
   if (sd) html += row('School district', `District ${+sd.properties.schooldist}`, 'schooldist');
   if (es?.properties.label) html += row('Zoned elementary', schoolLinks(es.properties), 'eszones');
   else html += row('Zoned elementary', `<span class="meta" style="display:inline">No zoned school — choice or unzoned area</span>`);
   if (ms?.properties.label) html += row('Zoned middle school', schoolLinks(ms.properties), 'mszones');
-  html += `<div class="subhead">Nearest public schools</div>${nearestSchools(lat,lng)}
+  html += nearestSchools(lat,lng) + `
   <div class="note" style="margin-bottom:4px">Zones are 2024-2025; locations are the Department of Education's latest published point file (2019-20) with 2021-22 enrollment — confirm with MySchools before enrolling. School links go to the DOE page; "profile" links go to InsideSchools.</div>`;
   html += `<div class="subhead">Colleges nearby</div>` + collegeHtml(lat,lng);
-  html += `<div class="subhead">Getting around</div>` + subwayHtml(lat,lng) + busHtml(lat,lng) + `<div id="bike"></div>`;
   html += `<div class="subhead">Health</div>` + hospitalHtml(lat,lng);
   html += `<div class="subhead">Faith</div>` + worshipHtml(lat,lng);
+  html += `<div class="subhead">The block, day to day</div>`;
   if (dsny) html += row('Sanitation district', `${esc(dsny.properties.district)}<span class="meta">Department of Sanitation collection district</span>`, 'dsny');
   html += `<div id="c311" style="margin-top:10px"><span class="spin"></span> 311 complaints…</div>
     <div id="food" style="margin-top:12px"><span class="spin"></span> Restaurant grades…</div>
