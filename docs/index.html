@@ -758,10 +758,6 @@ function crossedBlock(nta){
       <span class="n"><a href="#" data-biv="${i}">map →</a></span></li>`;
   });
   if (!rows) return '';
-  // the lighting × crime hex map lives on its own site
-  rows += `<li><span><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#3b4994;border:1px solid #999;margin-right:7px;vertical-align:-1px"></i>Street lighting complaints × violent crime
-    <span class="sub">block-level class shown in the safety chapter</span></span>
-    <span class="n"><a href="https://vitalcity-nyc.github.io/bivariate-lighting-crime/" target="_blank" rel="noopener">map ↗</a></span></li>`;
   return `<section class="blk" id="sec-crossed"><h3><span class="num">9</span> Two factors at once</h3>
     <ul class="toplist" style="margin-top:0">${rows}</ul>
     <div class="note">Each pairing classes this neighborhood low, mid or high on two indicators at once (terciles across all neighborhoods). "Map" paints the whole city by that pairing so you can see where this point sits in the pattern. Crossing two indicators shows correlation, not cause.</div></section>`;
