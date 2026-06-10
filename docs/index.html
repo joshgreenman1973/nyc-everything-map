@@ -288,14 +288,14 @@ fetch('data/cityoutline.json').then(r=>r.json()).then(gj => {
 const $ = id => document.getElementById(id);
 const LAYERS = {}, DATA = {};
 const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections'];
-const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','lightcrime','worship'];
+const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','lightcrime','worship','colleges'];
 let loaded = 0, totalFiles = LAYER_FILES.length + DATA_FILES.length;
 function tick(){
   loaded++;
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '7'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '8'; // bump when files in data/ change, so cached copies refresh
 const ready = Promise.all([
   ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
   ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
@@ -574,6 +574,7 @@ async function inspect(lat, lng, geoFeature=null){
   if (ms?.properties.label) html += row('Zoned middle school', schoolLinks(ms.properties), 'mszones');
   html += `<div class="subhead">Nearest public schools</div>${nearestSchools(lat,lng)}
   <div class="note" style="margin-bottom:4px">Zones are 2024-2025; locations are the Department of Education's latest published point file (2019-20) with 2021-22 enrollment — confirm with MySchools before enrolling. School links go to the DOE page; "profile" links go to InsideSchools.</div>`;
+  html += `<div class="subhead">Colleges nearby</div>` + collegeHtml(lat,lng);
   html += `<div class="subhead">Getting around</div>` + subwayHtml(lat,lng) + busHtml(lat,lng) + `<div id="bike"></div>`;
   html += `<div class="subhead">Health</div>` + hospitalHtml(lat,lng);
   html += `<div class="subhead">Faith</div>` + worshipHtml(lat,lng);
@@ -842,6 +843,17 @@ function hospitalHtml(lat,lng){
   return `<div class="row"><span class="k">Nearest hospitals</span><span class="v"></span></div>
     <ul class="toplist">` + picks.map(li).join('') + `</ul>
     <div class="note" style="margin:0 0 4px">All licensed hospital campuses and freestanding emergency departments in the state health department's facility file, straight-line distances. In an emergency call 911, which routes to the right place.</div>`;
+}
+function collegeHtml(lat,lng){
+  const near = DATA.colleges.map(c => ({name:c[0], lat:c[1], lng:c[2], total:c[3], control:c[4], url:c[5], d:haversine(lat,lng,c[1],c[2])}))
+    .sort((a,b)=>a.d-b.d).slice(0,3).filter(c=>c.d<4800);
+  if (!near.length) return `<div class="note" style="margin:0 0 6px">No college campus within about 3 miles.</div>`;
+  const miles = m => m < 1100 ? walkmin(m) + ' min walk' : (m/1609.34).toFixed(1) + ' mi';
+  return `<ul class="toplist">` + near.map(c =>
+    `<li class="poi" data-lat="${c.lat}" data-lng="${c.lng}" data-name="${esc(c.name)}">
+      <span>${c.url?`<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.name)}</a>`:esc(c.name)}<span class="sub">${c.total?fmt(c.total)+' students · ':''}${esc(c.control.toLowerCase())}</span></span>
+      <span class="n">${miles(c.d)}</span></li>`).join('') + `</ul>
+    <div class="note" style="margin:0 0 6px">From the college map's 173 campuses; enrollment is fall 2022 federal data, the latest compiled there.</div>`;
 }
 function worshipHtml(lat,lng){
   const near = DATA.worship.map(w => ({name:w[0], denom:w[1], lat:w[2], lng:w[3], d:haversine(lat,lng,w[2],w[3])}))
