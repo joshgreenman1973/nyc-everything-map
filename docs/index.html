@@ -874,7 +874,10 @@ async function fetchLiving(ctx){
       if (stale(ctx)||!$('c311cmp')) return;
       if (!cityTotal){ $('c311cmp').remove(); return; }
       const expected = cityTotal * circleSqMi(250) / CITY_LAND_SQMI;
-      $('c311cmp').innerHTML = `${(total/expected).toFixed(1)}× the citywide average for an area this size (about ${fmt(Math.round(expected))}).`;
+      let h = `${(total/expected).toFixed(1)}× the citywide average for an area this size (about ${fmt(Math.round(expected))})`;
+      const per = perResident(ctx, total, cityTotal, 250);
+      if (per) h += ` and ${per.mult.toFixed(1)}× per resident (roughly ${fmt(per.residents)} people live within 250 meters)`;
+      $('c311cmp').innerHTML = h + '. ' + (per ? PER_RESIDENT_CAVEAT : '');
     });
   }).catch(()=>{ if(!stale(ctx)&&$('c311')) $('c311').innerHTML='<span class="errnote">311 feed unavailable right now.</span>'; });
   // restaurants
@@ -993,6 +996,18 @@ async function fetchSafety(ctx){
     ['https://compstat-ledger.vercel.app/', 'Three decades of CompStat, charted'],
     ['https://vzv.nyc/', 'Vision Zero crash map'],
   ]);
+}
+
+/* per-resident comparison: estimate people inside the circle from neighborhood density */
+const PER_RESIDENT_CAVEAT = 'Job- and visitor-heavy areas run high per resident because workers and tourists are not residents.';
+function perResident(ctx, localTotal, cityTotal, radiusM){
+  const density = ctx.report?.demo?.density;          // people per square mile, this NTA
+  const cityPop = DATA.compare_geos?.NYC?.pop;
+  if (!density || !cityPop || !localTotal) return null;
+  const residents = Math.round(density * circleSqMi(radiusM));
+  if (residents < 200) return null;                   // parks, piers — per-resident is meaningless
+  const expected = cityTotal * residents / cityPop;
+  return {residents, mult: localTotal/expected};
 }
 
 /* 311 citywide baseline, fetched once per session */
@@ -1140,8 +1155,10 @@ async function fetchCrime(ctx){
       <div class="g"><b style="${delta!=null&&delta>0?'color:#b3382c':delta!=null&&delta<0?'color:#1f7a4d':''}">${delta==null?'—':(delta>0?'+':'')+delta.toFixed(0)+'%'}</b><span>vs. the same dates last year (${fmt(prev)})</span></div>
       <div class="g"><b>${rank?`${rank} of ${base.pctRates.length}`:'—'}</b><span>precinct rank, complaints per square mile (1 = most)</span></div>
     </div>
-    <div class="row"><span class="k">Of which</span><span class="v">${fmt(fel)} felonies · ${fmt(mis)} misdemeanors<span class="meta">${fmt(total-fel-mis)} violations</span></span></div>
-    ${spark}`;
+    <div class="row"><span class="k">Of which</span><span class="v">${fmt(fel)} felonies · ${fmt(mis)} misdemeanors<span class="meta">${fmt(total-fel-mis)} violations</span></span></div>`;
+  const perRes = perResident(ctx, total, base.cityTotal, RADIUS);
+  if (perRes) h += `<div class="note" style="margin:2px 0 4px">By residents instead of area: ${perRes.mult.toFixed(1)}× the citywide rate (roughly ${fmt(perRes.residents)} people live within 500 meters). ${PER_RESIDENT_CAVEAT}</div>`;
+  h += spark;
   if (top.length) h += `<ul class="toplist" style="margin-top:8px">`+top.map(([k,n])=>`<li><span>${titleCaseOfns(k)}</span><span class="n">${fmt(n)}</span></li>`).join('')+`</ul>`;
   h += `<div class="note">Counted by report date; the police department posts this data quarterly, so the window above is the latest it covers. The citywide comparison divides all complaints evenly over the city's land area — dense, busy places sit far above that line by nature. Raw complaint counts also reflect foot traffic and reporting behavior, and locations of sex crimes and some other offenses are withheld. Context, not a safety score.</div>`;
   $('crime').innerHTML = h;
