@@ -736,19 +736,19 @@ function nearestSchools(lat,lng){
   }).join('') + `</ul>`;
 }
 function hospitalHtml(lat,lng){
-  const all = DATA.hospitals.map(h => ({name:h[0], lat:h[1], lng:h[2], er:h[3], type:h[4], d:haversine(lat,lng,h[1],h[2])}))
+  const all = DATA.hospitals.map(h => ({name:h[0], lat:h[1], lng:h[2], er:h[3], note:h[4], d:haversine(lat,lng,h[1],h[2])}))
     .sort((a,b)=>a.d-b.d);
-  const nearest = all[0];
+  if (!all.length) return '';
+  const picks = all.slice(0,3);
   const nearestEr = all.find(h => h.er);
-  if (!nearest) return '';
+  if (nearestEr && !picks.includes(nearestEr)) picks.push(nearestEr);
   const miles = m => m < 1100 ? walkmin(m) + ' min walk' : (m/1609.34).toFixed(1) + ' mi';
-  const li = (h, label) => `<li class="poi" data-lat="${h.lat}" data-lng="${h.lng}" data-name="${esc(h.name)}">
-    <span>${label}: ${esc(h.name)}<span class="sub">${h.er?'has an emergency room':'no general emergency room'}${h.type&&h.type!=='Acute Care'?' · '+esc(h.type.toLowerCase()):''}</span></span>
+  const li = h => `<li class="poi" data-lat="${h.lat}" data-lng="${h.lng}" data-name="${esc(h.name)}">
+    <span>${esc(h.name)}<span class="sub">${h.er?(h===nearestEr?'<b style="color:#1f7a4d">closest emergency room</b>':'has an emergency room'):'no general emergency room'}${h.note?' · '+esc(h.note):''}</span></span>
     <span class="n">${miles(h.d)}</span></li>`;
-  let h = `<ul class="toplist">` + li(nearest, 'Closest hospital');
-  if (nearestEr && nearestEr !== nearest) h += li(nearestEr, 'Closest emergency room');
-  h += `</ul><div class="note" style="margin:0 0 4px">Straight-line distances. Emergency status from Medicare's hospital file; multi-campus systems can appear once, at their main campus — in an emergency call 911, which routes to the right place.</div>`;
-  return h;
+  return `<div class="row"><span class="k">Nearest hospitals</span><span class="v"></span></div>
+    <ul class="toplist">` + picks.map(li).join('') + `</ul>
+    <div class="note" style="margin:0 0 4px">All licensed hospital campuses and freestanding emergency departments in the state health department's facility file, straight-line distances. In an emergency call 911, which routes to the right place.</div>`;
 }
 function busHtml(lat,lng){
   const near = DATA.busstops.map(s => ({name:s[0],routes:s[1],lat:s[2],lng:s[3],d:haversine(lat,lng,s[2],s[3])}))

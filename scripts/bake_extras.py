@@ -199,31 +199,73 @@ def neighborhoods_project():
     print(sum(len(v) for v in out.values()), 'neighborhood profiles mapped')
 
 def hospitals():
-    """NYC hospitals with emergency-service flags from CMS Hospital General
-    Information, geocoded via GeoSearch. Two intersection-style addresses
-    (Jamaica and Flushing hospitals) need the street-address overrides below."""
-    url = ('https://data.cms.gov/provider-data/api/1/datastore/query/xubh-q36u/0'
-           '?conditions%5B0%5D%5Bproperty%5D=state&conditions%5B0%5D%5Bvalue%5D=NY&limit=500')
-    rows = json.load(urllib.request.urlopen(url))['results']
-    nyc = [r for r in rows if (r.get('countyparish') or '').upper()
-           in {'NEW YORK', 'KINGS', 'QUEENS', 'BRONX', 'RICHMOND'}]
-    overrides = {'JAMAICA HOSPITAL MEDICAL CENTER': '8900 Van Wyck Expressway, Jamaica, NY 11418',
-                 'FLUSHING HOSPITAL MEDICAL CENTER': '4500 Parsons Boulevard, Flushing, NY 11355'}
-    out = []
-    for r in nyc:
-        addr = overrides.get(r['facility_name'], f"{r['address']}, {r['citytown']}, NY {r['zip_code']}")
-        gu = 'https://geosearch.planninglabs.nyc/v2/search?' + urllib.parse.urlencode({'text': addr, 'size': 1})
-        feats = json.load(urllib.request.urlopen(gu)).get('features', [])
-        if not feats:
-            print('  GEOCODE MISS:', r['facility_name']); continue
-        lng, lat = feats[0]['geometry']['coordinates']
-        name = (r['facility_name'].title().replace("'S", "'s").replace('Nyc', 'NYC')
-                .replace('Nyu', 'NYU').replace(' Of ', ' of ').replace(' And ', ' and '))
-        out.append([name, round(lat, 5), round(lng, 5),
-                    1 if r['emergency_services'] == 'Yes' else 0,
-                    (r.get('hospital_type') or '').replace(' Hospitals', '')])
+    """Campus-level NYC hospitals + freestanding emergency departments from the
+    state health department facility file (vn5v-hh5r on health.data.ny.gov),
+    which lists every licensed site separately — unlike the federal CMS file,
+    where multi-campus systems collapse into one entry (NYP Brooklyn Methodist,
+    NYU Langone Brooklyn etc. disappear). Per-campus emergency-room status is a
+    hand-verified classification (NO_ER below) — re-verify when rerunning,
+    since emergency departments do open and close."""
+    q = urllib.parse.urlencode({
+        '$select': 'facility_name,description,latitude,longitude',
+        '$where': "county in('New York','Kings','Queens','Bronx','Richmond') AND "
+                  "(fac_desc_short='HOSP' OR description='Off-Campus Emergency Department')",
+        '$limit': 200})
+    rows = json.load(urllib.request.urlopen('https://health.data.ny.gov/resource/vn5v-hh5r.json?' + q))
+    # name prefix -> note (anything matched here is flagged as having no general ER)
+    NO_ER = {
+        'Hospital for Special Surgery': 'orthopedic specialty hospital',
+        'New York Eye and Ear': 'has a walk-in eye and ear emergency clinic only',
+        'Memorial Hospital for Cancer': 'cancer center; urgent care for its patients only',
+        'David H. Koch Center For Cancer': 'outpatient cancer center',
+        'New York-Presbyterian David H. Koch': 'outpatient surgery center',
+        'Rockefeller University Hospital': 'clinical research hospital',
+        'Calvary Hospital': 'palliative and hospice care',
+        'Henry J. Carter': 'long-term specialty care',
+        'Kingsbrook Jewish': 'post-acute campus; its emergency department closed in 2021',
+        'Mount Sinai -  Behavioral': 'behavioral health',
+        "Montefiore Einstein Children's Center": "children's mental health",
+        'NYU Langone Hospital - Joseph S.': 'ambulatory care',
+        'NYU Langone Orthopedic': 'orthopedic specialty; no general emergency room',
+        'RUMC-Bayley Seton': 'behavioral health and outpatient campus',
+    }
+    RENAME = {
+        'Memorial Hospital for Cancer and Allied Diseases': 'Memorial Sloan Kettering Cancer Center',
+        'Northwell Greenwich Village Hospital': 'Lenox Health Greenwich Village (freestanding ER)',
+        'Maimonides Health Bay Ridge Emergency Department': 'Maimonides Bay Ridge (freestanding ER)',
+        'Montefiore Med Center - Jack D Weiler Hosp of A Einstein College Div': 'Montefiore Weiler Hospital',
+        'Montefiore Medical Center - Henry & Lucy Moses Div': 'Montefiore Moses Campus',
+        'Montefiore Medical Center - Montefiore Westchester Square': 'Montefiore Westchester Square (freestanding ER)',
+        'Montefiore Medical Center-Wakefield Hospital': 'Montefiore Wakefield Hospital',
+        'New York-Presbyterian Hospital - Columbia Presbyterian Center': 'NewYork-Presbyterian / Columbia',
+        'New York-Presbyterian Hospital - New York Weill Cornell Center': 'NewYork-Presbyterian / Weill Cornell',
+        'New York-Presbyterian Hospital - Allen Hospital': 'NewYork-Presbyterian Allen Hospital',
+        'Mount Sinai Hospital - Mount Sinai Hospital of Queens': 'Mount Sinai Queens',
+        'University Hospital of Brooklyn': 'SUNY Downstate University Hospital',
+        'South Brooklyn Health': 'South Brooklyn Health (Coney Island Hospital)',
+        'SBH Health System': 'St. Barnabas Hospital (SBH)',
+        'St Johns Episcopal Hospital So Shore': "St. John's Episcopal Hospital",
+        'Staten Island University Hosp-North': 'Staten Island University Hospital - North',
+        "Staten Island University Hospital Prince's Bay": "Staten Island University Hospital - Prince's Bay",
+    }
+    seen, out = set(), []
+    for r in rows:
+        if not r.get('latitude'): continue
+        name = r['facility_name']
+        lat, lng = round(float(r['latitude']), 5), round(float(r['longitude']), 5)
+        key = (name, round(lat, 3), round(lng, 3))
+        if key in seen: continue
+        seen.add(key)
+        note = next((v for k, v in NO_ER.items() if name.startswith(k)), None)
+        disp = RENAME.get(name, name)
+        if 'freestanding ER' in disp:
+            note_out, er = 'freestanding emergency department, no inpatient beds', 1
+        else:
+            note_out, er = (note or '', 0 if note else 1)
+        out.append([disp, lat, lng, er, note_out])
+    out.sort(key=lambda x: x[0])
     json.dump(out, open(f'{OUT}/hospitals.json', 'w'), ensure_ascii=False)
-    print(len(out), 'hospitals,', sum(1 for h in out if h[3]), 'with emergency services')
+    print(len(out), 'hospital campuses,', sum(1 for h in out if h[3]), 'with an emergency room')
 
 def lightcrime():
     """Compact lookup of the bivariate lighting-crime map's hex classes.
