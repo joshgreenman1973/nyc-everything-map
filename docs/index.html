@@ -288,14 +288,14 @@ fetch('data/cityoutline.json').then(r=>r.json()).then(gj => {
 const $ = id => document.getElementById(id);
 const LAYERS = {}, DATA = {};
 const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections'];
-const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','lightcrime'];
+const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','lightcrime','worship'];
 let loaded = 0, totalFiles = LAYER_FILES.length + DATA_FILES.length;
 function tick(){
   loaded++;
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '6'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '7'; // bump when files in data/ change, so cached copies refresh
 const ready = Promise.all([
   ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
   ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
@@ -576,6 +576,7 @@ async function inspect(lat, lng, geoFeature=null){
   <div class="note" style="margin-bottom:4px">Zones are 2024-2025; locations are the Department of Education's latest published point file (2019-20) with 2021-22 enrollment — confirm with MySchools before enrolling. School links go to the DOE page; "profile" links go to InsideSchools.</div>`;
   html += `<div class="subhead">Getting around</div>` + subwayHtml(lat,lng) + busHtml(lat,lng) + `<div id="bike"></div>`;
   html += `<div class="subhead">Health</div>` + hospitalHtml(lat,lng);
+  html += `<div class="subhead">Faith</div>` + worshipHtml(lat,lng);
   if (dsny) html += row('Sanitation district', `${esc(dsny.properties.district)}<span class="meta">Department of Sanitation collection district</span>`, 'dsny');
   html += `<div id="c311" style="margin-top:10px"><span class="spin"></span> 311 complaints…</div>
     <div id="food" style="margin-top:12px"><span class="spin"></span> Restaurant grades…</div>
@@ -841,6 +842,16 @@ function hospitalHtml(lat,lng){
   return `<div class="row"><span class="k">Nearest hospitals</span><span class="v"></span></div>
     <ul class="toplist">` + picks.map(li).join('') + `</ul>
     <div class="note" style="margin:0 0 4px">All licensed hospital campuses and freestanding emergency departments in the state health department's facility file, straight-line distances. In an emergency call 911, which routes to the right place.</div>`;
+}
+function worshipHtml(lat,lng){
+  const near = DATA.worship.map(w => ({name:w[0], denom:w[1], lat:w[2], lng:w[3], d:haversine(lat,lng,w[2],w[3])}))
+    .sort((a,b)=>a.d-b.d).slice(0,4).filter(w=>w.d<2500);
+  if (!near.length) return `<div class="note" style="margin:0 0 6px">No house of worship in the database within about a 30 minute walk.</div>`;
+  return `<ul class="toplist">` + near.map(w =>
+    `<li class="poi" data-lat="${w.lat}" data-lng="${w.lng}" data-name="${esc(w.name)}">
+      <span>${esc(w.name)}<span class="sub">${esc(w.denom)}</span></span>
+      <span class="n">${walkmin(w.d)} min</span></li>`).join('') + `</ul>
+    <div class="note" style="margin:0 0 6px">Nearest houses of worship from the religion map's database of 2,847 congregations — coverage is broad but not complete, and congregations move.</div>`;
 }
 function busHtml(lat,lng){
   const near = DATA.busstops.map(s => ({name:s[0],routes:s[1],lat:s[2],lng:s[3],d:haversine(lat,lng,s[2],s[3])}))
@@ -1434,12 +1445,12 @@ async function fetchLore(ctx){
   const el = $('body-lore'); if (!el) return;
   const {lat,lng} = ctx;
   // nearest landmarks (static)
-  const near = DATA.landmarks.map(l => ({name:l[0],lat:l[1],lng:l[2],year:l[3],url:l[4],d:haversine(lat,lng,l[1],l[2])}))
+  const near = DATA.landmarks.map(l => ({name:l[0],lat:l[1],lng:l[2],year:l[3],url:l[4],arch:l[5]||'',d:haversine(lat,lng,l[1],l[2])}))
     .sort((a,b)=>a.d-b.d).slice(0,4).filter(l=>l.d<2500);
   let h = `<div class="subhead" style="margin-top:0">Nearest individual landmarks</div>`;
   if (near.length){
     h += `<ul class="toplist">`+near.map(l=>`<li class="poi" data-lat="${l.lat}" data-lng="${l.lng}" data-name="${esc(l.name)}">
-      <span>${l.url?`<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)}</a>`:esc(l.name)}<span class="sub">designated ${esc(l.year)||'—'}</span></span>
+      <span>${l.url?`<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)}</a>`:esc(l.name)}<span class="sub">designated ${esc(l.year)||'—'}${l.arch?' · '+esc(l.arch):''}</span></span>
       <span class="n">${walkmin(l.d)} min</span></li>`).join('')+`</ul>`;
   } else h += `<div class="note" style="margin:0 0 6px">No designated individual landmark within about a 30 minute walk.</div>`;
   h += `<div class="subhead">Nearby on Wikipedia</div><div id="wiki"><span class="spin"></span></div>`;
