@@ -900,17 +900,24 @@ async function fetchLiving(ctx){
       </div>
       <div class="note">Latest posted grade per restaurant, inspections from the last two years.</div>`;
   }).catch(()=>{ if(!stale(ctx)&&$('food')) $('food').innerHTML='<span class="errnote">Inspection feed unavailable right now.</span>'; });
-  // rodent inspections
-  soda('p937-wjvj',{'$select':'result,count(*) as n',
-    '$where':`within_circle(location, ${lat}, ${lng}, 200) AND inspection_date > '${daysAgoISO(365)}'`,
-    '$group':'result'})
-  .then(rows => {
+  // rodent inspections, benchmarked against the citywide hit rate
+  Promise.all([
+    soda('p937-wjvj',{'$select':'result,count(*) as n',
+      '$where':`within_circle(location, ${lat}, ${lng}, 200) AND inspection_date > '${daysAgoISO(365)}'`,
+      '$group':'result'}),
+    cityRatRate(),
+  ]).then(([rows, cityRate]) => {
     if (stale(ctx)||!$('rats')) return;
     const total = rows.reduce((s,x)=>s+ +x.n,0);
     if (!total){ $('rats').innerHTML = ''; return; }
-    const active = rows.filter(x=>/rat activity|failed/i.test(x.result||'')).reduce((s,x)=>s+ +x.n,0);
+    const isActive = x => /rat activity|failed/i.test(x.result||'');
+    const active = rows.filter(isActive).reduce((s,x)=>s+ +x.n,0);
+    const localRate = active/total*100;
+    let cmp = '';
+    if (cityRate!=null && total >= 5) cmp = ` — ${localRate>=cityRate*1.15?'worse than':localRate<=cityRate*0.85?'better than':'about'} the citywide hit rate of ${cityRate.toFixed(0)}%`;
     $('rats').innerHTML = row('Rat inspections within 200 meters, last 12 months',
-      `${fmt(total)}<span class="meta">${fmt(active)} found rat activity (health department inspections)</span>`);
+      `${fmt(total)}<span class="meta">${fmt(active)} found rat activity (${localRate.toFixed(0)}%${cmp})</span>`)
+      + `<div class="note" style="margin:0">Inspectors mostly go where complaints send them, so this measures inspected sites, not all property — and few inspections nearby can mean few complaints rather than no rats.</div>`;
   }).catch(()=>{ if(!stale(ctx)&&$('rats')) $('rats').innerHTML=''; });
   // Citi Bike (live availability)
   citibikeData().then(stations => {
@@ -925,6 +932,19 @@ async function fetchLiving(ctx){
       li.addEventListener('mouseleave', clearPoi);
     });
   });
+}
+
+/* citywide rodent hit rate, fetched once per session */
+let _cityRats = null;
+function cityRatRate(){
+  if (!_cityRats) _cityRats = soda('p937-wjvj',{'$select':'result,count(*) as n',
+      '$where':`inspection_date > '${daysAgoISO(365)}'`,'$group':'result'})
+    .then(rows => {
+      const total = rows.reduce((s,x)=>s+ +x.n,0);
+      const active = rows.filter(x=>/rat activity|failed/i.test(x.result||'')).reduce((s,x)=>s+ +x.n,0);
+      return total ? active/total*100 : null;
+    }).catch(()=>null);
+  return _cityRats;
 }
 
 /* Citi Bike GBFS, fetched once per session */
@@ -968,7 +988,6 @@ async function fetchSafety(ctx){
   const n0 = ctx.precinct;
   el.innerHTML = (n0 ? `<div class="row hl" id="pctrow"><span class="k">Police precinct</span><span class="v"><a href="${precinctUrl(n0)}" target="_blank" rel="noopener">${n0===22?'Central Park Precinct':ordinal(n0)+' Precinct'}</a></span></div>` : '')
     + `<div id="crime" style="margin-top:6px"><span class="spin"></span> Crime data…</div>
-    <div id="crash" style="margin-top:12px"><span class="spin"></span> Traffic crashes…</div>
     <div id="safetylinks"></div>`;
   if (n0) {
     const pctFeat = lookup(LAYERS.precinct, lat, lng);
@@ -977,18 +996,6 @@ async function fetchSafety(ctx){
     pr.addEventListener('mouseleave', clearShape);
   }
   fetchCrime(ctx).catch(()=>{ if(!stale(ctx)&&$('crime')) $('crime').innerHTML='<span class="errnote">Crime feed unavailable right now.</span>'; });
-  soda('h9gi-nx95',{'$select':'count(*) as n, sum(number_of_persons_injured) as inj, sum(number_of_persons_killed) as killed',
-    '$where':`within_circle(location, ${lat}, ${lng}, 250) AND crash_date > '${daysAgoISO(365)}'`})
-  .then(rows => {
-    if (stale(ctx)||!$('crash')) return;
-    const d = rows[0]||{};
-    $('crash').innerHTML = `<div class="row"><span class="k">Traffic crashes, last 12 months within 250 meters</span><span class="v"></span></div>
-      <div class="statpair">
-        <div class="g"><b>${fmt(d.n)}</b><span>reported crashes</span></div>
-        <div class="g"><b>${fmt(d.inj)}</b><span>people injured</span></div>
-        <div class="g" style="${+d.killed?'border-color:#b3382c':''}"><b style="${+d.killed?'color:#b3382c':''}">${fmt(d.killed)}</b><span>killed</span></div>
-      </div>`;
-  }).catch(()=>{ if(!stale(ctx)&&$('crash')) $('crash').innerHTML='<span class="errnote">Crash feed unavailable right now.</span>'; });
   const n = ctx.precinct;
   $('safetylinks').innerHTML = morelinks([
     n && [precinctUrl(n), (n===22?'Central Park Precinct':ordinal(n)+' Precinct') + ' page'],
@@ -1031,26 +1038,9 @@ function signedPct(v){
   return (r>0?'+':'') + r + '%';
 }
 function pctColor(v){ return v>0 ? 'color:#b3382c' : v<0 ? 'color:#1f7a4d' : ''; }
-function compstatBlock(cs, pctNum){
+function compstatEntry(cs, pctNum){
   const key = pctNum===22 ? 'Central Park Precinct' : `${ordinal(pctNum)} Precinct`;
-  const p = cs?.[key];
-  if (!p) return '';
-  const t = p.total_seven_major, ytd = t.year_to_date, m28 = t.twenty_eight_day, hist = t.historical||{};
-  const CRIMES = [['Murder','Murder'],['Rape','Rape'],['Robbery','Robbery'],['Fel. Assault','Felony assault'],['Burglary','Burglary'],['Gr. Larceny','Grand larceny'],['G.L.A.','Auto theft']];
-  let h = `<div class="row"><span class="k">Seven major felonies in the ${key === 'Central Park Precinct' ? key : esc(key.toLowerCase().replace(' precinct',' Precinct'))}, year to date through ${esc(p.report_period?.week_end||'')}</span><span class="v bignum">${fmt(ytd.current_year)}</span></div>
-    <div class="statpair">
-      <div class="g"><b style="${pctColor(ytd.pct_change)}">${signedPct(ytd.pct_change)}</b><span>vs. last year to date (${fmt(ytd.prior_year)})</span></div>
-      <div class="g"><b style="${pctColor(m28.pct_change)}">${signedPct(m28.pct_change)}</b><span>last 28 days vs. a year earlier</span></div>
-      <div class="g"><b style="${pctColor(hist['31_yr_pct'])}">${signedPct(hist['31_yr_pct'])}</b><span>vs. 31 years ago (1990s baseline)</span></div>
-    </div>
-    <ul class="toplist">`+CRIMES.map(([k,label])=>{
-      const c = p.seven_major_felonies?.[k]?.year_to_date;
-      if (!c) return '';
-      return `<li><span>${label}</span><span class="n">${fmt(c.current_year)} <span style="font-weight:400;${pctColor(c.pct_change)}">${signedPct(c.pct_change)}</span></span></li>`;
-    }).join('')+`</ul>
-    <div class="note" style="margin-top:6px">Precinct-wide weekly CompStat figures (major felonies only), fresher than the complaint feed below. Year-to-date counts with change vs. the same dates last year.</div>
-    <div class="subhead" style="margin-top:14px">All complaints, right around this point</div>`;
-  return h;
+  return {key, p: cs?.[key]};
 }
 
 /* crime context: shared citywide baselines, fetched once per session */
@@ -1093,8 +1083,15 @@ async function crimeBaselines(){
     .filter(r => areas[+r.addr_pct_cd])
     .map(r => ({pct:+r.addr_pct_cd, rate: +r.n/areas[+r.addr_pct_cd]}))
     .sort((a,b)=>b.rate-a.rate);
+  crimeCache.areas = areas;
   crimeCache.ready = true;
   return crimeCache;
+}
+let _cityCrash = null;
+function cityCrashTotal(){
+  if (!_cityCrash) _cityCrash = soda('h9gi-nx95',{'$select':'count(*) as n','$where':`crash_date > '${daysAgoISO(365)}'`})
+    .then(r=>+r[0].n).catch(()=>null);
+  return _cityCrash;
 }
 function fmtWindow(startISO, endISO){
   const o = {month:'long', day:'numeric'};
@@ -1110,12 +1107,15 @@ async function fetchCrime(ctx){
   const lastStart = (+base.start.slice(0,4)-1) + base.start.slice(4);
   const lastEnd = (+base.end.slice(0,4)-1) + base.end.slice(4);
   const sparkStart = new Date(new Date(base.end) - 380*86400000).toISOString().slice(0,10);
-  const [rows, lastYear, sparkOld, sparkNew, cs] = await Promise.all([
+  const [rows, lastYear, sparkOld, sparkNew, cs, crash, cityCrash] = await Promise.all([
     soda('5uac-w243', {'$select':'ofns_desc,law_cat_cd,count(*) as n','$where':wNow,'$group':'ofns_desc,law_cat_cd','$order':'n DESC','$limit':80}),
     soda('qgea-i56i', {'$select':'count(*) as n','$where':`${wNow} AND rpt_dt between '${lastStart}T00:00:00' and '${lastEnd}T23:59:59'`}),
     soda('qgea-i56i', {'$select':'date_trunc_ym(rpt_dt) as m,count(*) as n','$where':`${wNow} AND rpt_dt >= '${sparkStart}T00:00:00'`,'$group':'m'}),
     soda('5uac-w243', {'$select':'date_trunc_ym(rpt_dt) as m,count(*) as n','$where':wNow,'$group':'m'}),
     compstatData(),
+    soda('h9gi-nx95',{'$select':'count(*) as n, sum(number_of_persons_injured) as inj, sum(number_of_persons_killed) as killed',
+      '$where':`within_circle(location, ${lat}, ${lng}, 250) AND crash_date > '${daysAgoISO(365)}'`}).catch(()=>null),
+    cityCrashTotal(),
   ]);
   if (stale(ctx)||!$('crime')) return;
   const total = rows.reduce((s,x)=>s+ +x.n,0);
@@ -1148,19 +1148,59 @@ async function fetchCrime(ctx){
   const pc = n => n==null?'—':fmt(Math.round(n));
   const delta = prev > 0 ? (total-prev)/prev*100 : null;
   ctx.report.crime = {total, mult, delta};
-  let h = ctx.precinct ? compstatBlock(cs, ctx.precinct) : '';
-  h += `<div class="row"><span class="k">Crime complaints within 500 meters, ${fmtWindow(base.start, base.end)}</span><span class="v bignum">${fmt(total)}</span></div>
+  const perRes = perResident(ctx, total, base.cityTotal, RADIUS);
+  const {key: pctKey, p: csp} = ctx.precinct ? compstatEntry(cs, ctx.precinct) : {key:null, p:null};
+  const CRIMES = [['Murder','Murder'],['Rape','Rape'],['Robbery','Robbery'],['Fel. Assault','Felony assault'],['Burglary','Burglary'],['Gr. Larceny','Grand larceny'],['G.L.A.','Auto theft']];
+
+  /* ---------- levels: how it compares with the rest of the city ---------- */
+  let h = `<div class="subhead" style="margin-top:2px">How it compares with the rest of the city</div>`;
+  if (csp){
+    const ytd = csp.total_seven_major.year_to_date;
+    const area = base.areas?.[ctx.precinct];
+    const myRate = area ? ytd.current_year/area : null;
+    const cityRate = cs?.citywide ? cs.citywide.total_seven_major.year_to_date.current_year/CITY_LAND_SQMI : null;
+    h += `<div class="row"><span class="k">Major felonies in the ${esc(pctKey)}, year to date through ${esc(csp.report_period?.week_end||'')}</span><span class="v bignum">${fmt(ytd.current_year)}</span></div>`;
+    if (myRate && cityRate) h += `<div class="note" style="margin:0 0 4px">${(myRate/cityRate).toFixed(1)}× the citywide rate per square mile (${fmt(Math.round(myRate))} here vs. ${fmt(Math.round(cityRate))} citywide).</div>`;
+  }
+  h += `<div class="row"><span class="k">Crime complaints of every kind within 500 meters, ${fmtWindow(base.start, base.end)}</span><span class="v bignum">${fmt(total)}</span></div>
     <div class="statpair">
-      <div class="g"><b>${mult!=null ? mult.toFixed(1)+'×' : '—'}</b><span>the citywide average for an area this size (${pc(expected)})</span></div>
-      <div class="g"><b style="${delta!=null&&delta>0?'color:#b3382c':delta!=null&&delta<0?'color:#1f7a4d':''}">${delta==null?'—':(delta>0?'+':'')+delta.toFixed(0)+'%'}</b><span>vs. the same dates last year (${fmt(prev)})</span></div>
+      <div class="g"><b>${mult!=null ? mult.toFixed(1)+'×' : '—'}</b><span>the citywide average by area (${pc(expected)})</span></div>
+      <div class="g"><b>${perRes ? perRes.mult.toFixed(1)+'×' : '—'}</b><span>the citywide rate by residents (≈${perRes?fmt(perRes.residents):'—'} live here)</span></div>
       <div class="g"><b>${rank?`${rank} of ${base.pctRates.length}`:'—'}</b><span>precinct rank, complaints per square mile (1 = most)</span></div>
     </div>
     <div class="row"><span class="k">Of which</span><span class="v">${fmt(fel)} felonies · ${fmt(mis)} misdemeanors<span class="meta">${fmt(total-fel-mis)} violations</span></span></div>`;
-  const perRes = perResident(ctx, total, base.cityTotal, RADIUS);
-  if (perRes) h += `<div class="note" style="margin:2px 0 4px">By residents instead of area: ${perRes.mult.toFixed(1)}× the citywide rate (roughly ${fmt(perRes.residents)} people live within 500 meters). ${PER_RESIDENT_CAVEAT}</div>`;
+  if (top.length) h += `<ul class="toplist">`+top.map(([k,n])=>`<li><span>${titleCaseOfns(k)}</span><span class="n">${fmt(n)}</span></li>`).join('')+`</ul>`;
+  if (crash && crash[0]){
+    const d = crash[0];
+    const crashMult = cityCrash ? (+d.n)/(cityCrash*circleSqMi(250)/CITY_LAND_SQMI) : null;
+    h += `<div class="row" style="margin-top:8px"><span class="k">Traffic crashes within 250 meters, last 12 months</span><span class="v bignum">${fmt(d.n)}</span></div>
+      <div class="statpair">
+        <div class="g"><b>${crashMult!=null?crashMult.toFixed(1)+'×':'—'}</b><span>the citywide average by area</span></div>
+        <div class="g"><b>${fmt(d.inj)}</b><span>people injured</span></div>
+        <div class="g" style="${+d.killed?'border-color:#b3382c':''}"><b style="${+d.killed?'color:#b3382c':''}">${fmt(d.killed)}</b><span>killed</span></div>
+      </div>`;
+  }
+  h += `<div class="note">${perRes ? PER_RESIDENT_CAVEAT + ' ' : ''}Complaint counts also reflect foot traffic and reporting behavior, and locations of sex crimes and some other offenses are withheld. Context, not a safety score.</div>`;
+
+  /* ---------- trends: which way it is heading ---------- */
+  h += `<div class="subhead" style="margin-top:16px">Which way it's heading</div>`;
+  if (csp){
+    const t = csp.total_seven_major, ytd = t.year_to_date, m28 = t.twenty_eight_day, hist = t.historical||{};
+    h += `<div class="statpair">
+      <div class="g"><b style="${pctColor(ytd.pct_change)}">${signedPct(ytd.pct_change)}</b><span>major felonies vs. last year to date (${fmt(ytd.prior_year)})</span></div>
+      <div class="g"><b style="${pctColor(m28.pct_change)}">${signedPct(m28.pct_change)}</b><span>last 28 days vs. a year earlier</span></div>
+      <div class="g"><b style="${pctColor(hist['31_yr_pct'])}">${signedPct(hist['31_yr_pct'])}</b><span>vs. 31 years ago (1990s baseline)</span></div>
+    </div>
+    <ul class="toplist">`+CRIMES.map(([k,label])=>{
+      const c = csp.seven_major_felonies?.[k]?.year_to_date;
+      if (!c) return '';
+      return `<li><span>${label}</span><span class="n">${fmt(c.current_year)} <span style="font-weight:400;${pctColor(c.pct_change)}">${signedPct(c.pct_change)}</span></span></li>`;
+    }).join('')+`</ul>
+    <div class="note" style="margin:4px 0 8px">Precinct-wide weekly CompStat counts with change vs. the same dates last year; percent swings on small counts mean little.</div>`;
+  }
+  h += `<div class="row"><span class="k">Complaints near this point vs. the same dates last year</span><span class="v" style="font-weight:700;${delta!=null&&delta>0?'color:#b3382c':delta!=null&&delta<0?'color:#1f7a4d':''}">${delta==null?'—':(delta>0?'+':'')+delta.toFixed(0)+'%'}<span class="meta">${fmt(prev)} then · ${fmt(total)} now</span></span></div>`;
   h += spark;
-  if (top.length) h += `<ul class="toplist" style="margin-top:8px">`+top.map(([k,n])=>`<li><span>${titleCaseOfns(k)}</span><span class="n">${fmt(n)}</span></li>`).join('')+`</ul>`;
-  h += `<div class="note">Counted by report date; the police department posts this data quarterly, so the window above is the latest it covers. The citywide comparison divides all complaints evenly over the city's land area — dense, busy places sit far above that line by nature. Raw complaint counts also reflect foot traffic and reporting behavior, and locations of sex crimes and some other offenses are withheld. Context, not a safety score.</div>`;
+  h += `<div class="note">Counted by report date; the police department posts the complaint file quarterly, so its window is the latest covered. CompStat is precinct-wide and weekly; the complaint circle is hyper-local and quarterly.</div>`;
   $('crime').innerHTML = h;
 }
 function titleCaseOfns(s){
