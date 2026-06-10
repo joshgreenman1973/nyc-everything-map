@@ -104,5 +104,71 @@ def cityoutline():
         json.dump(d, open(f'{OUT}/cityoutline.json', 'w'))
     print('city outline written')
 
+def school_quality():
+    """Append 2023 ELA/math proficiency and 4-year grad rate to schools.json."""
+    def numify(v):
+        try: return round(float(v), 1)
+        except (TypeError, ValueError): return None
+    w = "year='2023' AND report_category='School' AND grade='All Grades'"
+    ela = {r['geographic_subdivision']: numify(r.get('level_3_4_1'))
+           for r in soda('iebs-5yhr', {'$select': 'geographic_subdivision,level_3_4_1',
+               '$where': w + " AND category='All Students'", '$limit': 3000})}
+    math = {r['geographic_division']: numify(r.get('pct_level_3_and_4'))
+            for r in soda('74kb-55u9', {'$select': 'geographic_division,pct_level_3_and_4',
+                '$where': w.replace('category', 'student_category') + " AND student_category='All Students'", '$limit': 3000})}
+    grad = {r['geographic_subdivision']: numify(r.get('grads_1'))
+            for r in soda('mjm3-8dw8', {'$select': 'geographic_subdivision,cohort,grads_1',
+                '$where': "cohort_year='2019' AND report_category='School' AND category='All Students'", '$limit': 6000})
+            if r.get('cohort') == '4 year June'}
+    schools = [s[:6] for s in json.load(open(f'{OUT}/schools.json'))]
+    for s in schools:
+        s.extend([ela.get(s[0]), math.get(s[0]), grad.get(s[0])])
+    json.dump(schools, open(f'{OUT}/schools.json', 'w'), ensure_ascii=False)
+    print('school quality metrics appended')
+
+def busstops():
+    rows = json.load(urllib.request.urlopen(
+        'https://data.ny.gov/resource/2ucp-7wg5.json?' + urllib.parse.urlencode(
+            {'$select': 'stop_name,route_short_name,latitude,longitude',
+             '$where': "in_effect='true' AND revenue_stop='1'", '$limit': 25000})))
+    stops = {}
+    for r in rows:
+        try: lat, lng = round(float(r['latitude']), 5), round(float(r['longitude']), 5)
+        except (TypeError, ValueError, KeyError): continue
+        s = stops.setdefault((r['stop_name'], round(lat, 4), round(lng, 4)),
+                             {'name': r['stop_name'], 'lat': lat, 'lng': lng, 'routes': set()})
+        s['routes'].add(r['route_short_name'])
+    out = [[s['name'], ' '.join(sorted(s['routes'])), s['lat'], s['lng']] for s in stops.values()]
+    json.dump(out, open(f'{OUT}/busstops.json', 'w'), ensure_ascii=False)
+    print(len(out), 'bus stops')
+
+def elections():
+    """Merge the election archive's 2025 general + primary ED results and simplify.
+    Requires a local clone of nyc-election-archive next to this project."""
+    base = '/Users/joshgreenman/Experiments/nyc-election-archive/docs'
+    gen = json.load(open(f'{base}/results_2025_general_mayor.geojson'))
+    pri = {f['properties']['ed']: f['properties']
+           for f in json.load(open(f'{base}/results_2025.geojson'))['features']}
+    feats = []
+    for f in gen['features']:
+        g = f['properties']
+        props = {'ed': g['ed'], 'g_win': g.get('final_winner'), 'g_pct': g.get('final_winner_pct'),
+                 'g_ballots': g.get('ballots'), 'g_mamdani': g.get('fc_mamdani'),
+                 'g_cuomo': g.get('fc_cuomo'), 'g_sliwa': g.get('fc_sliwa')}
+        p = pri.get(g['ed'])
+        if p:
+            props.update({'p_win': p.get('final_winner'), 'p_pct': p.get('final_winner_pct'),
+                          'p_ballots': p.get('ballots'), 'p_mamdani': p.get('fr_mamdani'),
+                          'p_cuomo': p.get('fr_cuomo')})
+        feats.append({'type': 'Feature', 'properties': props, 'geometry': f['geometry']})
+    json.dump({'type': 'FeatureCollection', 'features': feats}, open('elections_merged.geojson', 'w'))
+    subprocess.run(['npx', '-y', 'mapshaper', 'elections_merged.geojson',
+                    '-simplify', 'weighted', 'interval=6', 'keep-shapes',
+                    '-o', 'force', 'precision=0.00001', 'format=geojson', f'{OUT}/elections.json'], check=True)
+    d = json.load(open(f'{OUT}/elections.json'))
+    d['features'] = [f for f in d['features'] if f.get('geometry')]
+    json.dump(d, open(f'{OUT}/elections.json', 'w'))
+    print(len(d['features']), 'election districts')
+
 if __name__ == '__main__':
-    schools(); landmarks(); airquality(); hvi(); density_fields(); cityoutline()
+    schools(); school_quality(); landmarks(); airquality(); hvi(); density_fields(); cityoutline(); busstops(); elections()

@@ -68,6 +68,9 @@ code{background:#efe9da; border-radius:4px; padding:1px 6px; font-size:13px}
 <tr><td>Subway stations (496)</td><td><a href="https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f">39hk-dx4f</a></td><td>Walk times assume 80 meters per minute in a straight line.</td></tr>
 <tr><td>Air quality</td><td><a href="https://data.cityofnewyork.us/Environment/Air-Quality/c3uy-2p5r">c3uy-2p5r</a></td><td>Fine particulate matter (PM2.5) and nitrogen dioxide (NO2) annual averages for 2023 at the community district level, with citywide values for comparison, from the city's Community Air Survey.</td></tr>
 <tr><td>Heat vulnerability index</td><td><a href="https://data.cityofnewyork.us/Health/Heat-Vulnerability-Index-Rankings/4mhf-duep">4mhf-duep</a></td><td>Health department ranking by ZIP code tabulation area, 1 (least vulnerable in heat waves) to 5 (most).</td></tr>
+<tr><td>2025 election results (4,061 election districts)</td><td><a href="https://joshgreenman1973.github.io/nyc-election-archive/">NYC election archive</a></td><td>Election-district results for the 2025 mayoral general and Democratic primary (final ranked-choice round), from the certified Board of Elections data compiled in the election archive project. An election district is a few square blocks, so counts are small; districts the Board reports oddly may be missing.</td></tr>
+<tr><td>School quality metrics</td><td><a href="https://data.cityofnewyork.us/Education/English-Language-Arts-ELA-Test-Results-2013-2023/iebs-5yhr">iebs-5yhr</a>, <a href="https://data.cityofnewyork.us/Education/Math-Test-Results-2013-2023/74kb-55u9">74kb-55u9</a>, <a href="https://data.cityofnewyork.us/Education/Graduation-results-for-Cohorts-2012-to-2019-Classe/mjm3-8dw8">mjm3-8dw8</a></td><td>Share of students proficient (level 3 or 4) on the 2023 state English and math tests, all grades, all students; for high schools, the four-year June graduation rate for the 2019 cohort (class of 2023). The state suppresses small groups, so some schools show no number. One number cannot summarize a school.</td></tr>
+<tr><td>Bus stops (13,483)</td><td><a href="https://data.ny.gov/Transportation/MTA-Bus-Stops/2ucp-7wg5">2ucp-7wg5</a></td><td>Current in-effect revenue stops with their routes, deduplicated; the panel shows the nearest stops with distinct route sets.</td></tr>
 </table>
 
 <h3>Accuracy check</h3>
@@ -115,6 +118,7 @@ code{background:#efe9da; border-radius:4px; padding:1px 6px; font-size:13px}
 <tr><td>Rat inspections</td><td><a href="https://data.cityofnewyork.us/Health/Rodent-Inspection/p937-wjvj">p937-wjvj</a></td><td>Health department rodent inspections within 200 meters in the last 12 months, with the count that found rat activity or failed.</td></tr>
 <tr><td>Marshal evictions</td><td><a href="https://data.cityofnewyork.us/City-Government/Evictions/6z8x-wfk4">6z8x-wfk4</a></td><td>Executed evictions within a roughly 500 meter box in the last 12 months, residential and commercial. Executed evictions are the end of the process; filings are far more numerous and are not in this dataset.</td></tr>
 <tr><td>Affordable housing</td><td><a href="https://data.cityofnewyork.us/Housing-Development/Affordable-Housing-Production-by-Building/hg8x-zxpr">hg8x-zxpr</a></td><td>City-financed affordable units started within a roughly 500 meter box in the last five years, summed by project. Counts city-financed projects only.</td></tr>
+<tr><td>Property sales</td><td><a href="https://data.cityofnewyork.us/City-Government/NYC-Citywide-Rolling-Calendar-Sales/usep-8jbt">usep-8jbt</a></td><td>Department of Finance rolling sales on tax blocks numerically within 5 of the looked-up lot's block, last 12 months, excluding transfers under $10,000 (mostly deed transfers, not market sales). The median mixes co-ops, condos, houses and commercial property — read it with the building types shown.</td></tr>
 <tr><td>Citi Bike</td><td><a href="https://gbfs.citibikenyc.com/gbfs/gbfs.json">Citi Bike GBFS feed</a></td><td>The two nearest stations with bikes, e-bikes and open docks at the moment you click.</td></tr>
 <tr><td>Nearby Wikipedia articles</td><td><a href="https://www.mediawiki.org/wiki/Extension:GeoData">Wikipedia GeoData API</a></td><td>Articles geotagged within 800 meters, nearest first. Coverage and accuracy are whatever Wikipedia editors have tagged.</td></tr>
 <tr><td>Elevation</td><td><a href="https://www.usgs.gov/3d-elevation-program">United States Geological Survey elevation point query service</a></td><td>Ground elevation at the clicked point, shown in feet.</td></tr>
@@ -128,6 +132,9 @@ code{background:#efe9da; border-radius:4px; padding:1px 6px; font-size:13px}
 <li><b>School zone links</b> go to the Department of Education page for each school's code. Zone files are for 2024-2025; zones change, and some districts use choice systems with no zoned school.</li>
 <li><b>Precinct links:</b> all 78 generated precinct page links (including the new 116th Precinct in Queens) were verified to resolve on nyc.gov.</li>
 </ul>
+
+<h2>Compare mode</h2>
+<p>The "Compare" button in the report header pins the current point; picking a second point and pressing it again opens a side-by-side table of both neighborhoods' demographics, election results and (when loaded) crime and 311 counts, with citywide values for reference. Each column is that point's surrounding neighborhood tabulation area, not the point itself.</p>
 
 <h2>Known limitations</h2>
 <ul>

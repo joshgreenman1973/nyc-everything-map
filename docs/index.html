@@ -118,6 +118,24 @@ section.blk:last-of-type{border-bottom:0}
 .morelinks a:hover{border-color:var(--gold-deep); color:var(--ink); background:#fdf4dc}
 .morelinks a::after{content:" ↗"; font-size:10px; color:var(--gold-deep)}
 
+/* compare overlay */
+#comparewrap{position:absolute; inset:0; z-index:1005; display:none; align-items:center; justify-content:center;
+  background:rgba(22,33,58,.45); padding:18px}
+#comparebody{position:relative; background:var(--paper); border:2px solid var(--ink); border-radius:16px;
+  box-shadow:var(--shadow); padding:24px 26px; width:min(640px, 100%); max-height:88vh; overflow-y:auto}
+#comparebody h4{font-family:'Fraunces',serif; font-weight:900; font-size:22px; margin-bottom:12px}
+.cmptable{width:100%; border-collapse:collapse; font-size:13px}
+.cmptable th{text-align:right; font:700 12px 'Archivo'; padding:6px 8px; border-bottom:2px solid var(--ink); vertical-align:bottom}
+.cmptable th:first-child{text-align:left}
+.cmptable th span{display:block; font-weight:400; font-size:10.5px; color:#8a8f9e}
+.cmptable td{text-align:right; padding:6px 8px; border-bottom:1px solid var(--line); font-weight:600; font-variant-numeric:tabular-nums}
+.cmptable td:first-child{text-align:left; font-weight:400; color:var(--ink-soft)}
+.cmptable .cw{color:#8a8f9e; font-weight:400}
+.cmpclose{position:absolute; top:12px; right:12px; width:32px; height:32px; border-radius:50%;
+  border:2px solid var(--ink); background:var(--white); cursor:pointer; font:700 15px/1 'Archivo'}
+.cmpclose:hover{background:var(--gold)}
+.cmpclear{text-decoration:underline; cursor:pointer; font-weight:600}
+
 /* table of contents */
 .toc{display:flex; flex-wrap:wrap; gap:6px; padding:12px 26px 12px; background:var(--paper-deep); border-bottom:1.5px solid var(--line)}
 .toc a{font:700 11px 'Archivo'; letter-spacing:.02em; padding:5px 11px; border-radius:999px; cursor:pointer;
@@ -226,6 +244,8 @@ ul.toplist .sub{display:block; font-size:11.5px; color:#8a8f9e; font-weight:400}
   <div class="scroller" id="panelbody"></div>
 </aside>
 
+<div id="comparewrap"><div id="comparebody"></div></div>
+
 <button id="aicaution">⚠ AI caution</button>
 <div id="aipop">
   <h4>Read this before you rely on the map</h4>
@@ -258,8 +278,8 @@ fetch('data/cityoutline.json').then(r=>r.json()).then(gj => {
 
 const $ = id => document.getElementById(id);
 const LAYERS = {}, DATA = {};
-const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic'];
-const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi'];
+const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections'];
+const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops'];
 let loaded = 0, totalFiles = LAYER_FILES.length + DATA_FILES.length;
 function tick(){
   loaded++;
@@ -457,6 +477,7 @@ async function inspect(lat, lng, geoFeature=null){
     ${revDist!=null && revDist>40 ? `<div class="nearnote">Nearest address point, ${Math.round(revDist)} meters from where you clicked</div>` : ''}
     <div class="actions"><button id="copylink">Copy link</button>
       <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}" target="_blank" rel="noopener">Street View ↗</a>
+      <button id="comparebtn">⇄ Compare</button>
     </div>
   </div>`;
 
@@ -520,6 +541,14 @@ async function inspect(lat, lng, geoFeature=null){
   html += row('Public advocate', `${esc(O.citywide.public_advocate.name)}${partyTag(O.citywide.public_advocate.party)}`);
   html += row('Comptroller', `${esc(O.citywide.comptroller.name)}${partyTag(O.citywide.comptroller.party)}`);
   html += row('United States Senate', O.citywide.us_senators.map(s=>esc(s.name)).join('<br>'));
+  const edFeat = lookup(LAYERS.elections, lat, lng);
+  if (edFeat){
+    const e = edFeat.properties;
+    html += `<div class="subhead">How this election district voted in 2025</div>`;
+    if (e.g_win) html += row('Mayoral general', `${esc(e.g_win.split(' ').pop())} ${pct(e.g_pct)}<span class="meta">Mamdani ${pct(e.g_mamdani)} · Cuomo ${pct(e.g_cuomo)} · Sliwa ${pct(e.g_sliwa)} · ${fmt(e.g_ballots)} ballots</span>`, 'elections');
+    if (e.p_win) html += row('Democratic primary (final round)', `${esc(e.p_win.split(' ').pop())} ${pct(e.p_pct)}<span class="meta">Mamdani ${pct(e.p_mamdani)} · Cuomo ${pct(e.p_cuomo)} · ${fmt(e.p_ballots)} ballots</span>`, 'elections');
+    html += `<div class="note" style="margin:2px 0 8px">Election district ${esc(e.ed)} — a few square blocks, so small numbers; primary shows the final ranked-choice round.</div>`;
+  }
   const ad = asm ? String(+asm.properties.assembly_district) : null;
   html += morelinks([
     ['https://findmypollsite.vote.nyc/', 'Find your poll site'],
@@ -537,7 +566,7 @@ async function inspect(lat, lng, geoFeature=null){
   if (ms?.properties.label) html += row('Zoned middle school', schoolLinks(ms.properties), 'mszones');
   html += `<div class="subhead">Nearest public schools</div>${nearestSchools(lat,lng)}
   <div class="note" style="margin-bottom:4px">Zones are 2024-2025; locations are the Department of Education's latest published point file (2019-20) with 2021-22 enrollment — confirm with MySchools before enrolling. School links go to the DOE page; "profile" links go to InsideSchools.</div>`;
-  html += `<div class="subhead">Getting around</div>` + subwayHtml(lat,lng) + `<div id="bike"></div>`;
+  html += `<div class="subhead">Getting around</div>` + subwayHtml(lat,lng) + busHtml(lat,lng) + `<div id="bike"></div>`;
   if (dsny) html += row('Sanitation district', `${esc(dsny.properties.district)}<span class="meta">Department of Sanitation collection district</span>`, 'dsny');
   html += `<div id="c311" style="margin-top:10px"><span class="spin"></span> 311 complaints…</div>
     <div id="food" style="margin-top:12px"><span class="spin"></span> Restaurant grades…</div>
@@ -568,7 +597,7 @@ async function inspect(lat, lng, geoFeature=null){
   $('panel').classList.add('open');
   $('panelbody').scrollTop = 0;
 
-  const featMap = {nta, cd, council:cc, precinct:pp, schooldist:sd, eszones:es, mszones:ms, dsny, congress:cong, assembly:asm, senate:sen, hurricane:hurr, historic:hist};
+  const featMap = {nta, cd, council:cc, precinct:pp, schooldist:sd, eszones:es, mszones:ms, dsny, congress:cong, assembly:asm, senate:sen, hurricane:hurr, historic:hist, elections:edFeat};
   document.querySelectorAll('#panelbody .row.hl').forEach(r => {
     r.addEventListener('mouseenter', () => showShape(featMap[r.dataset.layer]));
     r.addEventListener('mouseleave', clearShape);
@@ -587,7 +616,26 @@ async function inspect(lat, lng, geoFeature=null){
 
   fetchElevation(lat,lng);
   const ctx = {lat,lng,bbl,revDist,revFailed,nta,zip,precinct: pp ? +pp.properties.precinct : null,token:Symbol()};
+  // snapshot for the compare mode
+  const D0 = nta ? DATA.nta_demographics[nta.properties.nta2020] : null;
+  ctx.report = {
+    label: props.name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+    hood: nta ? nta.properties.ntaname : (boro || '—'), boro,
+    demo: D0 || {},
+    ed: edFeat ? edFeat.properties : null,
+  };
   activeCtx = ctx;
+  $('comparebtn')?.addEventListener('click', () => {
+    if (!comparePin || comparePin.token === ctx.token){
+      comparePin = {token: ctx.token, report: ctx.report};
+      $('comparebtn').textContent = '⇄ Pinned — pick a second point';
+    } else {
+      renderCompare(comparePin.report, ctx.report);
+    }
+  });
+  if (comparePin && comparePin.token !== ctx.token){
+    $('comparebtn').textContent = `⇄ Compare with ${comparePin.report.hood.split('-')[0]}`;
+  }
   fetchLiving(ctx);   // chapter 3's live tiles fire right away
   fetchTrees(ctx);
   // remaining live chapters load as they scroll into view
@@ -612,7 +660,44 @@ async function inspect(lat, lng, geoFeature=null){
   }, 1500);
 }
 let activeCtx = null;
+let comparePin = null;
 const stale = ctx => ctx !== activeCtx;
+function renderCompare(A, B){
+  const CITY = DATA.compare_geos.NYC;
+  const r = (label, get, fmtfn) => {
+    const a = get(A), b = get(B);
+    if (a==null && b==null) return '';
+    return `<tr><td>${label}</td><td>${a!=null?fmtfn(a):'—'}</td><td>${b!=null?fmtfn(b):'—'}</td><td class="cw">${get({demo:CITY})!=null?fmtfn(get({demo:CITY})):''}</td></tr>`;
+  };
+  const d = k => rep => rep.demo?.[k];
+  const rows = [
+    r('People per square mile', d('density'), fmt),
+    r('Median household income', d('median_hh_income'), money),
+    r('Median gross rent', d('median_rent'), money),
+    r('Children (under 18)', rep=>rep.demo?.under18_pct ?? rep.demo?.under18_pct_calc, pct),
+    r('Seniors (65 and over)', rep=>rep.demo?.age65pl_pct ?? rep.demo?.senior_pct_calc ?? rep.demo?.senior_pct, pct),
+    r('Foreign born', d('foreign_born_pct'), pct),
+    r('Below poverty line', d('poverty_pct'), pct),
+    r("Bachelor's or higher", d('bachelors_plus_pct'), pct),
+    r('Renters', d('renter_occ_pct'), pct),
+    r('Rent burdened', d('rent_burdened_pct'), pct),
+    r('Median age', d('median_age'), v=>v),
+    r('Mamdani share, 2025 general', rep=>rep.ed?.g_mamdani, pct),
+    r('Crime complaints (latest quarter, 500 m)', rep=>rep.crime?.total, fmt),
+    r('— as multiple of citywide average', rep=>rep.crime?.mult, v=>v.toFixed(1)+'×'),
+    r('311 complaints (90 days, 250 m)', rep=>rep.c311?.total, fmt),
+  ].join('');
+  $('comparebody').innerHTML = `
+    <button class="cmpclose" onclick="document.getElementById('comparewrap').style.display='none'">×</button>
+    <h4>Two points, side by side</h4>
+    <table class="cmptable">
+      <tr><th></th><th>${esc(A.hood)}<span>${esc(A.label)}</span></th><th>${esc(B.hood)}<span>${esc(B.label)}</span></th><th class="cw">citywide</th></tr>
+      ${rows}
+    </table>
+    <div class="note" style="margin-top:10px">Demographics: American Community Survey 2016-2020 by neighborhood. Crime and 311 lines appear only if those sections loaded for both points (scroll to the safety section first). <span class="cmpclear">Clear comparison</span></div>`;
+  $('comparewrap').style.display = 'flex';
+  document.querySelector('.cmpclear').onclick = () => { comparePin = null; $('comparewrap').style.display='none'; $('comparebtn') && ($('comparebtn').textContent='⇄ Compare'); };
+}
 function lazySection(num, title, key, secId){
   return `<section class="blk" data-lazy="${key}"${secId?` id="${secId}"`:''}><h3><span class="num">${num}</span> ${title}</h3>
     <div id="body-${key}"><span class="spin"></span> Loading…</div></section>`;
@@ -633,16 +718,36 @@ async function fetchElevation(lat,lng){
 
 /* ---------- nearest schools (static) ---------- */
 function nearestSchools(lat,lng){
-  const near = DATA.schools.map(s => ({dbn:s[0],name:s[1],lat:s[2],lng:s[3],enr:s[4],span:s[5],d:haversine(lat,lng,s[2],s[3])}))
+  const near = DATA.schools.map(s => ({dbn:s[0],name:s[1],lat:s[2],lng:s[3],enr:s[4],span:s[5],ela:s[6],math:s[7],grad:s[8],d:haversine(lat,lng,s[2],s[3])}))
     .sort((a,b)=>a.d-b.d).slice(0,5);
   if (!near.length) return '';
   return `<ul class="toplist">` + near.map(s => {
     const code = s.dbn.slice(2);
+    let q = '';
+    if (s.grad != null) q = `${s.grad}% graduate in 4 years`;
+    else if (s.ela != null || s.math != null) q = `proficient: ${s.ela!=null?s.ela+'% reading':''}${s.ela!=null&&s.math!=null?' · ':''}${s.math!=null?s.math+'% math':''}`;
     return `<li class="poi" data-lat="${s.lat}" data-lng="${s.lng}" data-name="${esc(s.name)}">
       <span><a href="https://www.schools.nyc.gov/schools/${esc(code)}" target="_blank" rel="noopener">${esc(s.name)}</a>
-        <span class="sub">${s.span?'grades '+esc(s.span)+' · ':''}${s.enr?fmt(s.enr)+' students · ':''}<a href="https://insideschools.org/school/${esc(s.dbn)}" target="_blank" rel="noopener">profile</a></span></span>
+        <span class="sub">${s.span?'grades '+esc(s.span)+' · ':''}${s.enr?fmt(s.enr)+' students · ':''}<a href="https://insideschools.org/school/${esc(s.dbn)}" target="_blank" rel="noopener">profile</a></span>
+        ${q?`<span class="sub">${q}</span>`:''}</span>
       <span class="n">${walkmin(s.d)} min</span></li>`;
   }).join('') + `</ul>`;
+}
+function busHtml(lat,lng){
+  const near = DATA.busstops.map(s => ({name:s[0],routes:s[1],lat:s[2],lng:s[3],d:haversine(lat,lng,s[2],s[3])}))
+    .sort((a,b)=>a.d-b.d);
+  // dedupe: same routes across the street — keep the nearest few distinct route sets
+  const seen = new Set(), picks = [];
+  for (const s of near){
+    if (s.d > 700 || picks.length >= 2) break;
+    if (seen.has(s.routes)) continue;
+    seen.add(s.routes); picks.push(s);
+  }
+  if (!picks.length) return '';
+  return `<ul class="toplist">` + picks.map(s =>
+    `<li class="poi" data-lat="${s.lat}" data-lng="${s.lng}" data-name="${esc(titleWords(s.name))}">
+      <span>Bus: ${esc(titleWords(s.name))}<span class="sub">${esc(s.routes)}</span></span>
+      <span class="n">${walkmin(s.d)} min</span></li>`).join('') + `</ul>`;
 }
 
 /* ---------- subway (static) ---------- */
@@ -685,7 +790,7 @@ async function fetchLot(ctx){
     if (d.assesstot) h += row('Assessed value', money(d.assesstot));
     if (d.ownername) h += row('Owner of record', esc(d.ownername));
     if (d.landmark) h += row('Landmark', esc(d.landmark));
-    h += `<div id="hpd"></div><div id="housing" style="margin-top:6px"></div>`;
+    h += `<div id="hpd"></div><div id="sales" style="margin-top:6px"></div><div id="housing" style="margin-top:6px"></div>`;
     const b = String(parseInt(bbl,10)), boroId = b[0], block = parseInt(b.slice(1,6),10), lot = parseInt(b.slice(6),10);
     h += morelinks([
       [`https://zola.planning.nyc.gov/l/lot/${boroId}/${block}/${lot}`, 'Full zoning on ZoLa'],
@@ -694,8 +799,24 @@ async function fetchLot(ctx){
     h += `<div class="note">From the Department of City Planning's Primary Land Use Tax Lot Output (PLUTO) file, queried live.</div>`;
     el.innerHTML = h;
     fetchHpd(ctx, boroId, block, lot, +rows[0].unitsres);
+    fetchSales(ctx, boroId, block);
     fetchHousing(ctx);
   }catch(e){ if (!stale(ctx)) el.innerHTML = `<span class="errnote">Could not reach the live property feed.</span>`; }
+}
+async function fetchSales(ctx, boroId, block){
+  try{
+    const rows = await soda('usep-8jbt', {'$select':'address,sale_price,sale_date,building_class_category',
+      '$where':`borough='${boroId}' AND block::number between ${block-5} and ${block+5} AND sale_price::number > 10000`,
+      '$order':'sale_date DESC','$limit':200});
+    if (stale(ctx) || !$('sales')) return;
+    if (!rows.length){ $('sales').innerHTML = row('Property sales within ~5 blocks, last 12 months','None recorded'); return; }
+    const prices = rows.map(r=>+r.sale_price).sort((a,b)=>a-b);
+    const median = prices[Math.floor(prices.length/2)];
+    let h = row('Property sales within ~5 blocks, last 12 months', `${fmt(rows.length)}<span class="meta">median ${money(median)} (all property types mixed)</span>`);
+    h += `<ul class="toplist">`+rows.slice(0,3).map(r=>`<li><span>${esc(titleWords(r.address))}<span class="sub">${esc((r.building_class_category||'').replace(/^\d+\s*/,'').toLowerCase())}</span></span><span class="n">${money(r.sale_price)}<span class="sub" style="text-align:right">${monthYear(r.sale_date)}</span></span></li>`).join('')+`</ul>`;
+    h += `<div class="note">Department of Finance rolling sales, deed transfers under $10,000 excluded. "Blocks" are tax blocks adjacent in number, which usually but not always means nearby.</div>`;
+    $('sales').innerHTML = h;
+  }catch(e){ if(!stale(ctx)&&$('sales')) $('sales').innerHTML=''; }
 }
 async function fetchHousing(ctx){
   const {lat,lng} = ctx;
@@ -744,6 +865,7 @@ async function fetchLiving(ctx){
   .then(rows => {
     if (stale(ctx)||!$('c311')) return;
     const total = rows.reduce((s,x)=>s+ +x.n,0);
+    ctx.report.c311 = {total};
     let h = `<div class="row"><span class="k">311 complaints, last 90 days within 250 meters</span><span class="v bignum">${fmt(total)}</span></div>
       <div class="note" style="margin:0 0 6px" id="c311cmp"><span class="spin"></span> comparing to the citywide average…</div>`;
     if (rows.length) h += `<ul class="toplist">`+rows.slice(0,5).map(x=>`<li><span>${esc(x.complaint_type)}</span><span class="n">${fmt(x.n)}</span></li>`).join('')+`</ul>`;
@@ -1010,6 +1132,7 @@ async function fetchCrime(ctx){
     <div style="display:flex;justify-content:space-between;font-size:10px;color:#8a8f9e"><span>${keys[0]}</span><span>monthly complaints</span><span>${keys[keys.length-1]}</span></div>` : '';
   const pc = n => n==null?'—':fmt(Math.round(n));
   const delta = prev > 0 ? (total-prev)/prev*100 : null;
+  ctx.report.crime = {total, mult, delta};
   let h = ctx.precinct ? compstatBlock(cs, ctx.precinct) : '';
   h += `<div class="row"><span class="k">Crime complaints within 500 meters, ${fmtWindow(base.start, base.end)}</span><span class="v bignum">${fmt(total)}</span></div>
     <div class="statpair">
