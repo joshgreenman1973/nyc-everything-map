@@ -254,6 +254,7 @@ ul.toplist .sub{display:block; font-size:11.5px; color:#8a8f9e; font-weight:400}
 <a id="methlink" href="methodology.html">Methodology</a>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/h3-js@4.1.0/dist/h3-js.umd.js"></script>
 <script>
 /* ============================== setup ============================== */
 const NYC_BOUNDS = [[40.49,-74.27],[40.92,-73.68]];
@@ -279,7 +280,7 @@ fetch('data/cityoutline.json').then(r=>r.json()).then(gj => {
 const $ = id => document.getElementById(id);
 const LAYERS = {}, DATA = {};
 const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections'];
-const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals'];
+const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','lightcrime'];
 let loaded = 0, totalFiles = LAYER_FILES.length + DATA_FILES.length;
 function tick(){
   loaded++;
@@ -1199,6 +1200,7 @@ async function fetchCrime(ctx){
   h += `<div class="note">${perRes ? PER_RESIDENT_CAVEAT + ' ' : ''}Complaint counts also reflect foot traffic and reporting behavior, and locations of sex crimes and some other offenses are withheld. Context, not a safety score.</div>`;
 
   /* ---------- trends: which way it is heading ---------- */
+  h += lightCrimeBlock(ctx);
   h += `<div class="subhead" style="margin-top:16px">Which way it's heading</div>`;
   if (csp){
     const t = csp.total_seven_major, ytd = t.year_to_date, m28 = t.twenty_eight_day, hist = t.historical||{};
@@ -1218,6 +1220,40 @@ async function fetchCrime(ctx){
   h += spark;
   h += `<div class="note">Counted by report date; the police department posts the complaint file quarterly, so its window is the latest covered. CompStat is precinct-wide and weekly; the complaint circle is hyper-local and quarterly.</div>`;
   $('crime').innerHTML = h;
+}
+/* lighting-complaints × violent-crime bivariate class for the surrounding hex */
+const LC_TIER = ['low', 'mid', 'high'];
+function lcLabel(crimeT, lightT){
+  if (crimeT===2 && lightT===2) return {txt:'high violent crime and high lighting complaints — the overlap the bivariate map flags', hot:true};
+  if (crimeT===2 && lightT===0) return {txt:'high violent crime, few lighting complaints'};
+  if (crimeT===0 && lightT===2) return {txt:'many lighting complaints, low violent crime'};
+  return {txt:`${LC_TIER[crimeT]} violent crime, ${LC_TIER[lightT]} lighting complaints`};
+}
+function lightCrimeBlock(ctx){
+  const LC = DATA.lightcrime;
+  if (!LC || typeof h3 === 'undefined') return '';
+  let cell;
+  try{ cell = h3.latLngToCell(ctx.lat, ctx.lng, 9); }catch(e){ return ''; }
+  const v = LC.hexes[cell];
+  const [lightN, crimeN, nightN, lightT, crimeT, nightT] = v || [0,0,0,0,0,0];
+  const day = lcLabel(crimeT, lightT), night = lcLabel(nightT, lightT);
+  let h = `<div class="subhead" style="margin-top:14px">Lighting complaints and violent crime, this block group</div>
+    <div class="row hl" id="lcrow"><span class="k">All hours</span><span class="v" style="${day.hot?'color:#b3382c':''}">${day.txt}<span class="meta">${fmt(crimeN)} violent street crimes · ${fmt(lightN)} streetlight complaints in this ~3 block hex, Jan 2024 to Mar 2026</span></span></div>`;
+  if (night.txt !== day.txt) h += `<div class="row"><span class="k">After dark (8 p.m.–6 a.m.)</span><span class="v" style="${night.hot?'color:#b3382c':''}">${night.txt}<span class="meta">${fmt(nightN)} night-time violent crimes</span></span></div>`;
+  h += `<div class="note" style="margin:2px 0 0">"High" means the top 7% of hexes with any reports; "mid" the next 22%. Violent street crime here counts assault, robbery and murder reported outdoors or in the street. 311 lighting complaints measure what people report, not how dark a street actually is — well-lit blocks with active reporters can rank high, dark blocks nobody reports stay low. <a href="https://vitalcity-nyc.github.io/bivariate-lighting-crime/" target="_blank" rel="noopener">Explore the full bivariate map →</a></div>`;
+  // hover: outline the hex
+  setTimeout(() => {
+    const r = $('lcrow');
+    if (!r) return;
+    r.addEventListener('mouseenter', () => {
+      try{
+        const ring = h3.cellToBoundary(cell).map(([la,ln])=>[ln,la]);
+        showShape({type:'Feature', properties:{}, geometry:{type:'Polygon', coordinates:[[...ring, ring[0]]]}});
+      }catch(e){}
+    });
+    r.addEventListener('mouseleave', clearShape);
+  }, 0);
+  return h;
 }
 function titleCaseOfns(s){
   if (!s) return '—';

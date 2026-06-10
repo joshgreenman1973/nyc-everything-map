@@ -225,5 +225,21 @@ def hospitals():
     json.dump(out, open(f'{OUT}/hospitals.json', 'w'), ensure_ascii=False)
     print(len(out), 'hospitals,', sum(1 for h in out if h[3]), 'with emergency services')
 
+def lightcrime():
+    """Compact lookup of the bivariate lighting-crime map's hex classes.
+    Source: the live hexes file behind vitalcity-nyc.github.io/bivariate-lighting-crime."""
+    d = json.load(urllib.request.urlopen('https://vitalcity-nyc.github.io/bivariate-lighting-crime/hexes.geojson'))
+    hexes = {}
+    for f in d['features']:
+        p = f['properties']
+        hexes[p['h']] = [p.get('light_n', 0), p.get('crime_n', 0), p.get('crime_night_n', 0),
+                         p.get('light_t', 0), p.get('crime_t', 0), p.get('crime_night_t', 0)]
+    meta = d['meta']
+    json.dump({'meta': {'crime_window': [meta['crime']['first_date'], meta['crime']['last_date']],
+                        'outage_window': [meta['outages']['first_date'], meta['outages']['last_date']],
+                        'method': meta['percentile_method']},
+               'hexes': hexes}, open(f'{OUT}/lightcrime.json', 'w'))
+    print(len(hexes), 'lighting-crime hexes')
+
 if __name__ == '__main__':
-    schools(); school_quality(); landmarks(); airquality(); hvi(); density_fields(); cityoutline(); busstops(); elections(); neighborhoods_project(); hospitals()
+    schools(); school_quality(); landmarks(); airquality(); hvi(); density_fields(); cityoutline(); busstops(); elections(); neighborhoods_project(); hospitals(); lightcrime()
