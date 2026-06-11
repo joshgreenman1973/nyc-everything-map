@@ -288,14 +288,14 @@ fetch('data/cityoutline.json').then(r=>r.json()).then(gj => {
 const $ = id => document.getElementById(id);
 const LAYERS = {}, DATA = {};
 const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections'];
-const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','lightcrime','worship','colleges','artsvenues','publicart'];
+const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','lightcrime','worship','colleges','artsvenues','publicart','play','parks'];
 let loaded = 0, totalFiles = LAYER_FILES.length + DATA_FILES.length;
 function tick(){
   loaded++;
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '11'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '12'; // bump when files in data/ change, so cached copies refresh
 const ready = Promise.all([
   ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
   ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
@@ -571,6 +571,7 @@ async function inspect(lat, lng, geoFeature=null){
   html += `<section class="blk" id="sec-living"><h3><span class="num">3</span> Living here</h3>`;
   // mobility first (the most universal daily need), then education, health, faith, then block conditions
   html += `<div class="subhead" style="margin-top:0">Getting around</div>` + subwayHtml(lat,lng) + busHtml(lat,lng) + `<div id="bike"></div>`;
+  html += `<div class="subhead">Play</div>` + playHtml(lat,lng);
   html += `<div class="subhead">Schools</div>`;
   if (sd) html += row('School district', `District ${+sd.properties.schooldist}`, 'schooldist');
   if (es?.properties.label) html += row('Zoned elementary', schoolLinks(es.properties), 'eszones');
@@ -855,6 +856,63 @@ function collegeHtml(lat,lng){
       <span>${c.url?`<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.name)}</a>`:esc(c.name)}<span class="sub">${c.total?fmt(c.total)+' students · ':''}${esc(c.control.toLowerCase())}</span></span>
       <span class="n">${miles(c.d)}</span></li>`).join('') + `</ul>
     <div class="note" style="margin:0 0 6px">From the college map's 173 campuses; enrollment is fall 2022 federal data, the latest compiled there.</div>`;
+}
+function parkDistance(f, lat, lng){
+  // 0 if inside; otherwise distance to the nearest boundary vertex (~20 m vertex spacing)
+  if (featContains(f, lng, lat)) return 0;
+  let best = Infinity;
+  const rings = f.geometry.type === 'Polygon' ? f.geometry.coordinates : f.geometry.coordinates.flat();
+  for (const ring of rings)
+    for (const [x,y] of ring){
+      const d = haversine(lat, lng, y, x);
+      if (d < best) best = d;
+    }
+  return best;
+}
+function nearbyParks(lat, lng){
+  const out = [];
+  for (const f of DATA.parks.features){
+    const b = f._bb || (f._bb = bboxOf(f.geometry));
+    // quick reject: bbox more than ~1 km away
+    if (lng < b[0]-0.012 || lng > b[2]+0.012 || lat < b[1]-0.009 || lat > b[3]+0.009) continue;
+    const d = parkDistance(f, lat, lng);
+    if (d <= 800) out.push({f, name: f.properties.signname, type: f.properties.typecategory, acres: +f.properties.acres || 0, d});
+  }
+  return out.sort((a,b)=>a.d-b.d);
+}
+function playHtml(lat,lng){
+  const parks = nearbyParks(lat,lng);
+  let ph = '';
+  if (parks.length){
+    const p5 = parks.filter(p=>p.d<=400).length;
+    ph = `<div class="row"><span class="k">Parks</span><span class="v">${p5} within a 5 minute walk · ${parks.length} within 10<span class="meta">nearest: ${parks.slice(0,3).map(p=>`${esc(p.name)}${p.acres>=1?' ('+(p.acres>=10?Math.round(p.acres):p.acres.toFixed(1))+' acres)':''}`).join(' · ')}</span></span></div>`;
+  } else {
+    ph = `<div class="row"><span class="k">Parks</span><span class="v">None within a 10 minute walk</span></div>`;
+  }
+  const all = DATA.play.map(x => ({name:x[0], kind:x[1], lat:x[2], lng:x[3], sports:x[4], d:haversine(lat,lng,x[2],x[3])}))
+    .filter(x=>x.d<800).sort((a,b)=>a.d-b.d);
+  const within5 = all.filter(x=>x.d<=400);
+  const KINDS = {playground:'playgrounds', court:'courts', spray:'spray showers', pool:'pools', rec:'rec centers'};
+  const sum = list => {
+    const c = {};
+    list.forEach(x=>c[x.kind]=(c[x.kind]||0)+1);
+    return Object.entries(c).map(([k,n])=>`${n} ${KINDS[k]||k}`).join(' · ') || 'nothing';
+  };
+  let h = ph + `<div class="row"><span class="k">Play spots within a 5 minute walk</span><span class="v">${sum(within5)}</span></div>
+    <div class="row"><span class="k">Within a 10 minute walk</span><span class="v">${sum(all)}</span></div>`;
+  // nearest few named places, deduped by name
+  const seen = new Set(), picks = [];
+  for (const x of all){
+    if (seen.has(x.name)) continue;
+    seen.add(x.name); picks.push(x);
+    if (picks.length >= 4) break;
+  }
+  if (picks.length) h += `<ul class="toplist">`+picks.map(x =>
+    `<li class="poi" data-lat="${x.lat}" data-lng="${x.lng}" data-name="${esc(x.name)}">
+      <span>${esc(x.name)}<span class="sub">${esc(x.kind)}${x.sports?' · '+esc(x.sports.replace(/,/g,', ')):''}</span></span>
+      <span class="n">${walkmin(x.d)} min</span></li>`).join('')+`</ul>`;
+  h += `<div class="note" style="margin:0 0 6px">Parks are real park land (parks department property map, plazas and strips excluded), measured to the park's edge. Play spots are the playground explorer's 6,735 playgrounds, courts, spray showers, pools and recreation centers. Straight-line walk times; entrances can add a block or two.</div>`;
+  return h;
 }
 function artsHtml(lat,lng){
   const av = DATA.artsvenues.map(x => ({name:x[0], cat:x[1], lat:x[2], lng:x[3], url:x[4], d:haversine(lat,lng,x[2],x[3])}))
