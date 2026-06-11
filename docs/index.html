@@ -295,7 +295,7 @@ function tick(){
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '10'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '11'; // bump when files in data/ change, so cached copies refresh
 const ready = Promise.all([
   ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
   ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
@@ -557,7 +557,8 @@ async function inspect(lat, lng, geoFeature=null){
     html += `<div class="subhead">How this election district voted</div>`;
     if (e.g_win) html += row('2025 mayoral general', `${esc(e.g_win.split(' ').pop())} ${pct(e.g_pct)}<span class="meta">Mamdani ${pct(e.g_mamdani)} · Cuomo ${pct(e.g_cuomo)} · Sliwa ${pct(e.g_sliwa)} · ${fmt(e.g_ballots)} ballots</span>`, 'elections');
     if (e.p_win) html += row('2025 Democratic primary (final round)', `${esc(e.p_win.split(' ').pop())} ${pct(e.p_pct)}<span class="meta">Mamdani ${pct(e.p_mamdani)} · Cuomo ${pct(e.p_cuomo)} · ${fmt(e.p_ballots)} ballots</span>`, 'elections');
-    if (e.x_total) html += row('2024 presidential', `${e.x_harris >= e.x_trump ? 'Harris '+pct(e.x_harris) : 'Trump '+pct(e.x_trump)}<span class="meta">Harris ${pct(e.x_harris)} · Trump ${pct(e.x_trump)} · ${fmt(e.x_total)} votes (citywide: Harris 69.0)</span>`, 'elections');
+    if (e.x_total) html += row('2024 presidential', `${e.x_harris >= e.x_trump ? 'Harris '+pct(e.x_harris) : 'Trump '+pct(e.x_trump)}<span class="meta">Harris ${pct(e.x_harris)} · Trump ${pct(e.x_trump)} · ${fmt(e.x_total)} votes (citywide: Harris 69.0)${e.x_joint?` · counted jointly with ED ${e.x_joint}`:''}</span>`, 'elections');
+    else if (e.g_win) html += row('2024 presidential', `<span class="meta" style="display:inline">No separate 2024 tally — the board merged this district's votes in a way the certified file does not resolve</span>`);
     html += `<div class="note" style="margin:2px 0 8px">Election district ${esc(e.ed)} — a few square blocks, so small numbers; the primary shows the final ranked-choice round. Certified Board of Elections results; districts the board combined may be missing a year.</div>`;
   }
   html += morelinks([
