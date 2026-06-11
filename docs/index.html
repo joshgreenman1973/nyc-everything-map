@@ -288,14 +288,14 @@ fetch('data/cityoutline.json').then(r=>r.json()).then(gj => {
 const $ = id => document.getElementById(id);
 const LAYERS = {}, DATA = {};
 const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections'];
-const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','lightcrime','worship','colleges','artsvenues'];
+const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','lightcrime','worship','colleges','artsvenues','publicart'];
 let loaded = 0, totalFiles = LAYER_FILES.length + DATA_FILES.length;
 function tick(){
   loaded++;
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '9'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '10'; // bump when files in data/ change, so cached copies refresh
 const ready = Promise.all([
   ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
   ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
@@ -580,6 +580,7 @@ async function inspect(lat, lng, geoFeature=null){
   html += `<div class="subhead">Colleges nearby</div>` + collegeHtml(lat,lng);
   html += `<div class="subhead">Health</div>` + hospitalHtml(lat,lng);
   html += `<div class="subhead">Faith</div>` + worshipHtml(lat,lng);
+  html += `<div class="subhead">Arts and culture</div>` + artsHtml(lat,lng) + publicArtHtml(lat,lng);
   html += `<div class="subhead">The block, day to day</div>`;
   if (dsny) html += row('Sanitation district', `${esc(dsny.properties.district)}<span class="meta">Department of Sanitation collection district</span>`, 'dsny');
   html += `<div id="c311" style="margin-top:10px"><span class="spin"></span> 311 complaints…</div>
@@ -853,6 +854,41 @@ function collegeHtml(lat,lng){
       <span>${c.url?`<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.name)}</a>`:esc(c.name)}<span class="sub">${c.total?fmt(c.total)+' students · ':''}${esc(c.control.toLowerCase())}</span></span>
       <span class="n">${miles(c.d)}</span></li>`).join('') + `</ul>
     <div class="note" style="margin:0 0 6px">From the college map's 173 campuses; enrollment is fall 2022 federal data, the latest compiled there.</div>`;
+}
+function artsHtml(lat,lng){
+  const av = DATA.artsvenues.map(x => ({name:x[0], cat:x[1], lat:x[2], lng:x[3], url:x[4], d:haversine(lat,lng,x[2],x[3])}))
+    .sort((a,b)=>a.d-b.d);
+  const seenCat = {}, picks = [];
+  for (const x of av){
+    if (x.d > 1600 || picks.length >= 5) break;
+    if ((seenCat[x.cat]||0) >= 2) continue;   // variety over five galleries in a row
+    seenCat[x.cat] = (seenCat[x.cat]||0)+1; picks.push(x);
+  }
+  if (!picks.length) return `<div class="note" style="margin:0 0 6px">No venue from the arts map within about a 20 minute walk.</div>`;
+  return `<ul class="toplist">`+picks.map(x =>
+    `<li class="poi" data-lat="${x.lat}" data-lng="${x.lng}" data-name="${esc(x.name)}">
+      <span>${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a>`:esc(x.name)}<span class="sub">${esc(x.cat.replace('_',' '))}</span></span>
+      <span class="n">${walkmin(x.d)} min</span></li>`).join('')+`</ul>
+    <div class="note" style="margin:0 0 8px">From the arts map's 2,119 curated venues — galleries, theaters, museums, libraries, bookstores, music and more, capped at two per category for variety.</div>`;
+}
+function publicArtHtml(lat,lng){
+  const pool = DATA.publicart.map(x => ({title:x[0], artist:x[1], lat:x[2], lng:x[3], src:x[4], yr:x[5], d:haversine(lat,lng,x[2],x[3])}))
+    .filter(x=>x.d<1600).sort((a,b)=> (a.d-b.d) || (b.artist?1:-1) - (a.artist?1:-1));
+  // the two source catalogs overlap — keep one entry per title, preferring the one with an artist
+  const seen = {}, deduped = [];
+  for (const x of pool){
+    const k = x.title.toLowerCase().replace(/[^a-z0-9]+/g,'');
+    if (seen[k]){ if (x.artist && !seen[k].artist) Object.assign(seen[k], {artist:x.artist, yr:x.yr||seen[k].yr, src:x.src}); continue; }
+    seen[k] = x; deduped.push(x);
+  }
+  const near = deduped.slice(0,3);
+  if (!near.length) return '';
+  return `<div class="row"><span class="k">Public art nearby</span><span class="v"></span></div>
+    <ul class="toplist">`+near.map(x =>
+    `<li class="poi" data-lat="${x.lat}" data-lng="${x.lng}" data-name="${esc(x.title)}">
+      <span>${esc(x.title)}<span class="sub">${[x.artist, x.yr, x.src==='monument'?'parks monument':'Percent for Art'].filter(Boolean).map(esc).join(' · ')}</span></span>
+      <span class="n">${walkmin(x.d)} min</span></li>`).join('')+`</ul>
+    <div class="note" style="margin:0 0 6px">Permanent works from the parks monuments catalog and the Percent for Art program — a subset of the <a href="https://joshgreenman1973.github.io/nyc-public-art-map/" target="_blank" rel="noopener">full public art map</a>, which also covers transit art and temporary installations.</div>`;
 }
 function worshipHtml(lat,lng){
   const near = DATA.worship.map(w => ({name:w[0], denom:w[1], lat:w[2], lng:w[3], d:haversine(lat,lng,w[2],w[3])}))
@@ -1458,24 +1494,7 @@ async function fetchLore(ctx){
   // nearest landmarks (static)
   const near = DATA.landmarks.map(l => ({name:l[0],lat:l[1],lng:l[2],year:l[3],url:l[4],arch:l[5]||'',d:haversine(lat,lng,l[1],l[2])}))
     .sort((a,b)=>a.d-b.d).slice(0,4).filter(l=>l.d<2500);
-  // arts and culture venues
-  const av = DATA.artsvenues.map(x => ({name:x[0], cat:x[1], lat:x[2], lng:x[3], url:x[4], d:haversine(lat,lng,x[2],x[3])}))
-    .sort((a,b)=>a.d-b.d);
-  const seenCat = {}, picks = [];
-  for (const x of av){
-    if (x.d > 1600 || picks.length >= 5) break;
-    if ((seenCat[x.cat]||0) >= 2) continue;   // variety over five galleries in a row
-    seenCat[x.cat] = (seenCat[x.cat]||0)+1; picks.push(x);
-  }
-  let h = '';
-  if (picks.length){
-    h += `<div class="subhead" style="margin-top:0">Arts and culture nearby</div><ul class="toplist">`+picks.map(x =>
-      `<li class="poi" data-lat="${x.lat}" data-lng="${x.lng}" data-name="${esc(x.name)}">
-        <span>${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a>`:esc(x.name)}<span class="sub">${esc(x.cat.replace('_',' '))}</span></span>
-        <span class="n">${walkmin(x.d)} min</span></li>`).join('')+`</ul>
-      <div class="note" style="margin:0 0 10px">From the arts map's 2,119 curated venues — galleries, theaters, museums, libraries, bookstores, music and more, capped at two per category for variety.</div>`;
-  }
-  h += `<div class="subhead" style="margin-top:0">Nearest individual landmarks</div>`;
+  let h = `<div class="subhead" style="margin-top:0">Nearest individual landmarks</div>`;
   if (near.length){
     h += `<ul class="toplist">`+near.map(l=>`<li class="poi" data-lat="${l.lat}" data-lng="${l.lng}" data-name="${esc(l.name)}">
       <span>${l.url?`<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)}</a>`:esc(l.name)}<span class="sub">designated ${esc(l.year)||'—'}${l.arch?' · '+esc(l.arch):''}</span></span>
