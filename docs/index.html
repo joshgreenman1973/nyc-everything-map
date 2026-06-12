@@ -144,6 +144,16 @@ section.blk:last-of-type{border-bottom:0}
   border:1.5px solid var(--ink); background:var(--white); cursor:pointer; font:700 12px/1 'Archivo'}
 #bivclose:hover{background:var(--gold)}
 
+/* snapshot */
+.snapshot{padding:14px 26px 12px; background:var(--white); border-bottom:1.5px solid var(--line)}
+.snapshot p{font-family:'Fraunces',serif; font-size:15.5px; line-height:1.5; margin-bottom:10px}
+.snapshot .chips{display:flex; flex-wrap:wrap; gap:7px}
+.snapshot .chips a{display:flex; flex-direction:column; gap:1px; padding:7px 12px; border:1.5px solid var(--line);
+  border-radius:10px; background:var(--paper); cursor:pointer; min-width:78px}
+.snapshot .chips a:hover{border-color:var(--gold-deep); background:#fdf4dc}
+.snapshot .chips span{font:700 9.5px 'Archivo'; letter-spacing:.08em; text-transform:uppercase; color:#8a8f9e}
+.snapshot .chips b{font-family:'Fraunces',serif; font-size:15px}
+
 /* table of contents */
 .toc{display:flex; flex-wrap:wrap; gap:6px; padding:12px 26px 12px; background:var(--paper-deep); border-bottom:1.5px solid var(--line)}
 .toc a{font:700 11px 'Archivo'; letter-spacing:.02em; padding:5px 11px; border-radius:999px; cursor:pointer;
@@ -491,6 +501,9 @@ async function inspect(lat, lng, geoFeature=null){
     </div>
   </div>`;
 
+  /* ----- snapshot: plain-language summary + fact chips (no composite scores) ----- */
+  html += snapshotBlock(lat, lng, nta, boro);
+
   /* ----- table of contents ----- */
   const TOC = [['place','The place'],['people','Who represents it'],['living','Living here'],['safety','Safety'],['lot','Lot & housing'],['changing','What’s changing'],['lore','Lore'],['numbers','By the numbers'],['crossed','Two factors']];
   html += `<nav class="toc">`+TOC.map(([id,label])=>`<a data-sec="sec-${id}">${label}</a>`).join('')+`</nav>`;
@@ -633,8 +646,8 @@ async function inspect(lat, lng, geoFeature=null){
     navigator.clipboard.writeText(location.href).then(()=>{ e.target.textContent='Copied ✓'; setTimeout(()=>e.target.textContent='Copy link',1500); });
   });
 
-  // TOC jump links
-  document.querySelectorAll('#panelbody .toc a').forEach(a =>
+  // TOC + snapshot chip jump links
+  document.querySelectorAll('#panelbody .toc a, #panelbody .snapshot .chips a').forEach(a =>
     a.addEventListener('click', () => document.getElementById(a.dataset.sec)?.scrollIntoView({behavior:'smooth', block:'start'})));
   // bivariate preset map links
   document.querySelectorAll('#panelbody a[data-biv]').forEach(a =>
@@ -805,6 +818,70 @@ function clearBivMap(){
 function lazySection(num, title, key, secId){
   return `<section class="blk" data-lazy="${key}"${secId?` id="${secId}"`:''}><h3><span class="num">${num}</span> ${title}</h3>
     <div id="body-${key}"><span class="spin"></span> Loading…</div></section>`;
+}
+let _cityVcrimeRate = null;
+function cityVcrimeRate(){
+  if (_cityVcrimeRate == null){
+    let c = 0, p = 0;
+    for (const d of Object.values(DATA.nta_demographics)){
+      if (d.pop > 200 && d.vcrime_n != null){ c += d.vcrime_n; p += d.pop; }
+    }
+    _cityVcrimeRate = p ? c/p*1000 : null;
+  }
+  return _cityVcrimeRate;
+}
+function ratioWord(r, hi, lo){
+  return r >= 1.25 ? hi : r <= 0.8 ? lo : null;
+}
+function snapshotBlock(lat, lng, nta, boro){
+  const D = nta ? DATA.nta_demographics[nta.properties.nta2020] : null;
+  if (!D || !D.pop || D.pop < 200) return '';
+  const CITY = DATA.compare_geos.NYC;
+  const chips = [];
+  const chip = (sec, label, value) => chips.push(`<a data-sec="${sec}"><span>${label}</span><b>${value}</b></a>`);
+
+  // nearest subway + supermarket + parks (all from static data)
+  const sub = DATA.subway.map(s=>haversine(lat,lng,s[2],s[3])).sort((a,b)=>a-b)[0];
+  if (sub != null) chip('sec-living','Subway', sub > 3200 ? '2+ mi' : walkmin(sub)+' min');
+  const parks = nearbyParks(lat,lng);
+  chip('sec-living','Parks ≤10 min', String(parks.length));
+  const market = DATA.supermarkets.map(s=>haversine(lat,lng,s[1],s[2])).sort((a,b)=>a-b)[0];
+  if (market != null && market < 4000) chip('sec-living','Supermarket', walkmin(market)+' min');
+  // crime rate vs city (NTA-level, 2024-Mar 2026 violent street crime)
+  const cr = cityVcrimeRate();
+  if (cr && D.vcrime_n != null){
+    chip('sec-safety','Violent crime', ((D.vcrime_n/D.pop*1000)/cr).toFixed(1)+'× city rate');
+  }
+  if (D.median_hh_income) chip('sec-numbers','Median income', money(D.median_hh_income));
+  const ar = askingRent(nta);
+  if (ar) chip('sec-lot','Asking rent', money(ar.rent));
+  else if (D.median_rent) chip('sec-numbers','Survey rent', money(D.median_rent));
+  if (D.density) chip('sec-numbers','Density', (D.density/CITY.density).toFixed(1)+'× city');
+
+  // guarded plain-language sentence — only clauses the data supports
+  const parts = [];
+  const dw = ratioWord(D.density/CITY.density, 'denser than most of the city', 'less dense than most of the city');
+  if (dw) parts.push(dw);
+  if (sub != null) parts.push(sub <= 500 ? 'with the subway close at hand' : sub > 1600 ? 'far from the subway' : null);
+  const iw = D.median_hh_income && ratioWord(D.median_hh_income/CITY.median_hh_income, 'incomes well above the city median', 'incomes well below the city median');
+  if (iw) parts.push(iw);
+  if (cr && D.vcrime_n != null){
+    const crw = ratioWord((D.vcrime_n/D.pop*1000)/cr, 'reported violent street crime above the citywide rate', 'reported violent street crime below the citywide rate');
+    if (crw) parts.push(crw);
+  }
+  const u18 = D.under18_pct ?? D.under18_pct_calc;
+  const aw = u18 && ratioWord(u18/CITY.under18_pct, 'more children than the city average', 'fewer children than the city average');
+  if (aw) parts.push(aw);
+  const clauses = parts.filter(Boolean);
+  const sentence = clauses.length >= 2
+    ? `${esc(nta.properties.ntaname)} is ${clauses[0]}, ${clauses.slice(1).join(', ')} — all of it from the numbers and caveats below.`
+    : '';
+
+  return `<div class="snapshot">
+    ${sentence ? `<p>${sentence}</p>` : ''}
+    <div class="chips">${chips.join('')}</div>
+    <div class="note" style="margin:6px 0 0">Each figure is one real measurement against the citywide value — no composite scores. Tap a chip for the full picture and its caveats.</div>
+  </div>`;
 }
 function morelinks(items){
   const links = items.filter(Boolean).map(([u,label])=>`<a href="${u}" target="_blank" rel="noopener">${label}</a>`).join('');
