@@ -296,7 +296,7 @@ fetch('data/cityoutline.json').then(r=>r.json()).then(gj => {
 
 const $ = id => document.getElementById(id);
 const LAYERS = {}, DATA = {};
-const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections','tracts','hoods_alt'];
+const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections','tracts','hoods_alt','hoods_whong'];
 const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','worship','colleges','artsvenues','publicart','play','parks','supermarkets','askingrents','transit45','tract_context'];
 let loaded = 0, totalFiles = LAYER_FILES.length + DATA_FILES.length;
 function tick(){
@@ -304,7 +304,7 @@ function tick(){
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '16'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '17'; // bump when files in data/ change, so cached copies refresh
 const ready = Promise.all([
   ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
   ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
@@ -917,17 +917,20 @@ function snapshotBlock(lat, lng, nta, boro){
 }
 
 function altNeighborhoods(lat, lng, nta, props){
-  const official = npNorm(nta.properties.ntaname.replace(/\([^)]*\)/g,''));
+  // official tabulation-area name plus its hyphen components, so we don't echo a name the panel already shows
+  const officialParts = [nta.properties.ntaname, ...nta.properties.ntaname.replace(/\([^)]*\)/g,'').split('-')].map(npNorm);
   const out = [];
   const add = n => {
     if (!n) return;
     const k = npNorm(n);
-    if (!k || official.includes(k) || out.some(x=>npNorm(x)===k)) return;
+    if (!k || officialParts.some(o=>o && (o===k || o.includes(k) || k.includes(o))) || out.some(x=>npNorm(x)===k)) return;
     out.push(n);
   };
-  const mm = lookup(LAYERS.hoods_alt, lat, lng);
+  const cw = lookup(LAYERS.hoods_whong, lat, lng);   // Chris Whong's curated, open-licensed set (386)
+  if (cw) add(cw.properties.name);
+  const mm = lookup(LAYERS.hoods_alt, lat, lng);     // community-drawn Google map (503)
   if (mm) add(mm.properties.name);
-  add(props.neighbourhood);
+  add(props.neighbourhood);                          // the geocoder's gazetteer (Who's On First)
   return out.slice(0,3);
 }
 function morelinks(items){
