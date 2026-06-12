@@ -117,6 +117,7 @@ section.blk:last-of-type{border-bottom:0}
   background:var(--white); color:var(--ink-soft); text-decoration:none}
 .morelinks a:hover{border-color:var(--gold-deep); color:var(--ink); background:#fdf4dc}
 .morelinks a::after{content:" ↗"; font-size:10px; color:var(--gold-deep)}
+#reach45btn::after{content:"" !important}
 
 /* compare overlay */
 #comparewrap{position:absolute; inset:0; z-index:1005; display:none; align-items:center; justify-content:center;
@@ -341,7 +342,7 @@ function tick(){
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '20'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '21'; // bump when files in data/ change, so cached copies refresh
 const ready = Promise.all([
   ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
   ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
@@ -674,8 +675,7 @@ async function inspect(lat, lng, geoFeature=null){
   html += `<section class="blk" id="sec-living"><h3><span class="num">3</span> Living here</h3>`;
   // mobility first (the most universal daily need), then education, health, faith, then block conditions
   html += `<div class="subhead" style="margin-top:0">Getting around</div>` + subwayHtml(lat,lng) + busHtml(lat,lng) + `<div id="bike"></div>
-    <div class="morelinks" style="margin-top:6px"><a href="#" id="reach45btn" style="border-color:var(--gold-deep)">Show my 45-minute transit reach</a>
-    <a href="https://joshgreenman1973.github.io/45-minute-city/" target="_blank" rel="noopener">The full 45-minute city map</a></div>
+    <div class="morelinks" style="margin-top:6px"><a href="#" id="reach45btn" style="border-color:var(--gold-deep)">Show my 45-minute transit reach</a></div>
     <div id="reach45stat"></div>`;
   html += `<div class="subhead">Groceries</div>` + supermarketHtml(lat,lng);
   html += `<div class="subhead">Play</div>` + playHtml(lat,lng);
