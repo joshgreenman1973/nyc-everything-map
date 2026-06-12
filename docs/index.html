@@ -304,7 +304,7 @@ function tick(){
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '15'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '16'; // bump when files in data/ change, so cached copies refresh
 const ready = Promise.all([
   ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
   ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
@@ -320,9 +320,36 @@ function lookup(layer,lat,lng){if(!layer)return null;for(const f of layer.featur
 
 /* ---------- geocoding ---------- */
 const GEO = 'https://geosearch.planninglabs.nyc/v2';
+const NOM = 'https://nominatim.openstreetmap.org';
+const NYC_VIEWBOX = '-74.30,40.92,-73.68,40.49';
+const BORO_BY_COUNTY = {'New York County':'Manhattan','Kings County':'Brooklyn','Queens County':'Queens','Bronx County':'Bronx','Richmond County':'Staten Island'};
+// Normalize an OpenStreetMap (Nominatim) result into the GeoSearch feature shape.
+// Used only when the city geocoder (GeoSearch) is unreachable; carries no tax-lot (BBL).
+function nomToFeature(n){
+  const a = n.address || {};
+  const name = [a.house_number, a.road].filter(Boolean).join(' ') || (n.display_name||'').split(',')[0];
+  return {type:'Feature', geometry:{type:'Point', coordinates:[+n.lon, +n.lat]},
+    properties:{name, label:(n.display_name||'').replace(', United States','').replace(/, \d{5}.*/,''),
+      borough: BORO_BY_COUNTY[a.county] || a.borough || a.city_district || '',
+      postalcode: a.postcode || '', neighbourhood: a.neighbourhood || a.suburb || '', _osm:true}};
+}
+async function geocodeNominatim(text){
+  const u = `${NOM}/search?q=${encodeURIComponent(text)}&format=json&addressdetails=1&limit=6&countrycodes=us&viewbox=${NYC_VIEWBOX}&bounded=1`;
+  const r = await fetch(u);
+  return r.ok ? (await r.json()).map(nomToFeature) : [];
+}
+async function reverseNominatim(lat,lng){
+  const r = await fetch(`${NOM}/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`);
+  if (!r.ok) return null;
+  const n = await r.json();
+  return n && n.lat ? nomToFeature(n) : null;
+}
 async function geocode(text){
-  const r = await fetch(`${GEO}/autocomplete?text=${encodeURIComponent(text)}&size=6`);
-  return (await r.json()).features || [];
+  try{
+    const r = await fetch(`${GEO}/autocomplete?text=${encodeURIComponent(text)}&size=6`);
+    if (!r.ok) throw new Error(r.status);
+    return (await r.json()).features || [];
+  }catch(e){ try{ return await geocodeNominatim(text); }catch(_){ return []; } }
 }
 async function reverse(lat,lng,attempt=0){
   try{
@@ -331,7 +358,8 @@ async function reverse(lat,lng,attempt=0){
     const f = (await r.json()).features?.[0] || null;
     return {f, failed:false};
   }catch(e){
-    if (attempt < 2){ await new Promise(res=>setTimeout(res, 900*(attempt+1))); return reverse(lat,lng,attempt+1); }
+    if (attempt < 1){ await new Promise(res=>setTimeout(res, 700)); return reverse(lat,lng,attempt+1); }
+    try{ const f = await reverseNominatim(lat,lng); if (f) return {f, failed:false, osm:true}; }catch(_){}
     return {f:null, failed:true};
   }
 }
@@ -467,8 +495,8 @@ async function inspect(lat, lng, geoFeature=null){
   const px = map.project([lat,lng], z);
   map.flyTo(map.unproject(desktop ? px.subtract([215,0]) : px.add([0,window.innerHeight*0.18]), z), z, {duration:.7});
 
-  let rev = geoFeature, revFailed = false;
-  if (!rev){ const rr = await reverse(lat,lng); rev = rr.f; revFailed = rr.failed; }
+  let rev = geoFeature, revFailed = false, geoOsm = false;
+  if (!rev){ const rr = await reverse(lat,lng); rev = rr.f; revFailed = rr.failed; geoOsm = !!rr.osm; }
   const props = rev?.properties || {};
   const bbl = props.addendum?.pad?.bbl || null;
   let revDist = null;
@@ -493,6 +521,7 @@ async function inspect(lat, lng, geoFeature=null){
     <div class="kicker">Point report</div>
     <h2>${addrLine}</h2>
     <div class="sub">${nta ? `<b style="color:#fff">${esc(nta.properties.ntaname)}</b> · ` : ''}${subBits}<span id="elev"></span></div>
+    ${geoOsm ? `<div class="nearnote">City geocoder is down — address from OpenStreetMap; tax-lot details unavailable until it is back.</div>` : ''}
     ${revDist!=null && revDist>40 ? `<div class="nearnote">Nearest address point, ${Math.round(revDist)} meters from where you clicked</div>` : ''}
     <div class="actions"><button id="copylink">Copy link</button>
       <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}" target="_blank" rel="noopener">Street View ↗</a>
@@ -656,7 +685,7 @@ async function inspect(lat, lng, geoFeature=null){
     a.addEventListener('click', e => { e.preventDefault(); showBivMap(+a.dataset.biv); }));
 
   fetchElevation(lat,lng);
-  const ctx = {lat,lng,bbl,revDist,revFailed,nta,zip,precinct: pp ? +pp.properties.precinct : null,token:Symbol()};
+  const ctx = {lat,lng,bbl,revDist,revFailed,geoOsm,nta,zip,precinct: pp ? +pp.properties.precinct : null,token:Symbol()};
   // snapshot for the compare mode
   const D0 = nta ? DATA.nta_demographics[nta.properties.nta2020] : null;
   ctx.report = {
@@ -1177,7 +1206,9 @@ async function fetchLot(ctx){
   const {bbl, revDist} = ctx;
   if (!bbl){
     el.innerHTML = ctx.revFailed
-      ? `<span class="errnote">The geocoder is not responding right now, so lot details are unavailable — try this point again in a moment.</span>`
+      ? `<span class="errnote">The city geocoder is not responding right now, so lot details are unavailable — try this point again in a moment.</span>`
+      : ctx.geoOsm
+      ? `<span class="note" style="margin:0">The city geocoder is down; this address came from OpenStreetMap as a fallback. Tax-lot details (zoning, owner, year built) need the city service and will return when it is back.</span>`
       : `<span class="note" style="margin:0">No tax lot found at this point (streets, parks and water are not lots).</span>`;
     return;
   }
