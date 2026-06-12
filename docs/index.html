@@ -272,7 +272,6 @@ ul.toplist .sub{display:block; font-size:11.5px; color:#8a8f9e; font-weight:400}
 <a id="methlink" href="methodology.html">Methodology</a>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/h3-js@4.1.0/dist/h3-js.umd.js"></script>
 <script>
 /* ============================== setup ============================== */
 const NYC_BOUNDS = [[40.49,-74.27],[40.92,-73.68]];
@@ -297,15 +296,15 @@ fetch('data/cityoutline.json').then(r=>r.json()).then(gj => {
 
 const $ = id => document.getElementById(id);
 const LAYERS = {}, DATA = {};
-const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections','tracts'];
-const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','lightcrime','worship','colleges','artsvenues','publicart','play','parks','supermarkets','askingrents','transit45','tract_context'];
+const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections','tracts','hoods_alt'];
+const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','worship','colleges','artsvenues','publicart','play','parks','supermarkets','askingrents','transit45','tract_context'];
 let loaded = 0, totalFiles = LAYER_FILES.length + DATA_FILES.length;
 function tick(){
   loaded++;
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '14'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '15'; // bump when files in data/ change, so cached copies refresh
 const ready = Promise.all([
   ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
   ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
@@ -519,6 +518,8 @@ async function inspect(lat, lng, geoFeature=null){
   if (nta){
     const cdtaName = (nta.properties.cdtaname||'').replace(/^\w+\d+\s/,'').replace(/\s\(CD \d+ (Equivalent|Approximation)\)/,'');
     html += row('Neighborhood', `${esc(nta.properties.ntaname)}<span class="meta">Neighborhood tabulation area ${esc(nta.properties.nta2020)}</span>`, 'nta');
+    const alts = altNeighborhoods(lat, lng, nta, props);
+    if (alts.length) html += `<div class="note" style="margin:-2px 0 8px">Other maps put this spot in <b>${alts.map(esc).join('</b> or <b>')}</b> — neighborhood borders are unofficial, and every map draws them differently.</div>`;
     html += row('Borough', esc(boro));
     if (cd) html += row('Community district', `${esc(boro)} CD ${+cdCode.slice(1)}<span class="meta">Community Board ${+cdCode.slice(1)}${cdtaName?' · '+esc(cdtaName):''}</span>`, 'cd');
   } else {
@@ -885,6 +886,21 @@ function snapshotBlock(lat, lng, nta, boro){
     <div class="note" style="margin:6px 0 0">Each figure is one real measurement against the citywide value — no composite scores. Tap a chip for the full picture and its caveats.</div>
   </div>`;
 }
+
+function altNeighborhoods(lat, lng, nta, props){
+  const official = npNorm(nta.properties.ntaname.replace(/\([^)]*\)/g,''));
+  const out = [];
+  const add = n => {
+    if (!n) return;
+    const k = npNorm(n);
+    if (!k || official.includes(k) || out.some(x=>npNorm(x)===k)) return;
+    out.push(n);
+  };
+  const mm = lookup(LAYERS.hoods_alt, lat, lng);
+  if (mm) add(mm.properties.name);
+  add(props.neighbourhood);
+  return out.slice(0,3);
+}
 function morelinks(items){
   const links = items.filter(Boolean).map(([u,label])=>`<a href="${u}" target="_blank" rel="noopener">${label}</a>`).join('');
   return links ? `<div class="morelinks">${links}</div>` : '';
@@ -1059,11 +1075,11 @@ function playHtml(lat,lng){
   const all = DATA.play.map(x => ({name:x[0], kind:x[1], lat:x[2], lng:x[3], sports:x[4], d:haversine(lat,lng,x[2],x[3])}))
     .filter(x=>x.d<800).sort((a,b)=>a.d-b.d);
   const within5 = all.filter(x=>x.d<=400);
-  const KINDS = {playground:'playgrounds', court:'courts', spray:'spray showers', pool:'pools', rec:'rec centers'};
+  const KIND1 = {playground:'playground', court:'court', spray:'spray shower', pool:'pool', rec:'rec center'};
   const sum = list => {
     const c = {};
     list.forEach(x=>c[x.kind]=(c[x.kind]||0)+1);
-    return Object.entries(c).map(([k,n])=>`${n} ${KINDS[k]||k}`).join(' · ') || 'nothing';
+    return Object.entries(c).map(([k,n])=>`${n} ${KIND1[k]||k}${n===1?'':'s'}`).join(' · ') || 'nothing';
   };
   let h = ph + `<div class="row"><span class="k">Play spots within a 5 minute walk</span><span class="v">${sum(within5)}</span></div>
     <div class="row"><span class="k">Within a 10 minute walk</span><span class="v">${sum(all)}</span></div>`;
@@ -1577,7 +1593,7 @@ async function fetchCrime(ctx){
       <div class="g"><b>${perRes ? perRes.mult.toFixed(1)+'×' : '—'}</b><span>the citywide rate by residents (≈${perRes?fmt(perRes.residents):'—'} live here)</span></div>
       <div class="g"><b>${rank?`${rank} of ${base.pctRates.length}`:'—'}</b><span>precinct rank, complaints per square mile (1 = most)</span></div>
     </div>
-    <div class="row"><span class="k">Of which</span><span class="v">${fmt(fel)} felonies · ${fmt(mis)} misdemeanors<span class="meta">${fmt(total-fel-mis)} violations</span></span></div>`;
+    <div class="row"><span class="k">How serious were they?</span><span class="v">${fmt(fel)} felonies · ${fmt(mis)} misdemeanors<span class="meta">plus ${fmt(total-fel-mis)} violations (the least serious tier, like open container). Felonies are the most serious; the ${fmt(total)} above counts all three.</span></span></div>`;
   if (top.length) h += `<ul class="toplist">`+top.map(([k,n])=>`<li><span>${titleCaseOfns(k)}</span><span class="n">${fmt(n)}</span></li>`).join('')+`</ul>`;
   if (crash && crash[0]){
     const d = crash[0];
@@ -1592,7 +1608,6 @@ async function fetchCrime(ctx){
   h += `<div class="note">${perRes ? PER_RESIDENT_CAVEAT + ' ' : ''}Complaint counts also reflect foot traffic and reporting behavior, and locations of sex crimes and some other offenses are withheld. Context, not a safety score.</div>`;
 
   /* ---------- trends: which way it is heading ---------- */
-  h += lightCrimeBlock(ctx);
   h += `<div class="subhead" style="margin-top:16px">Which way it's heading</div>`;
   if (csp){
     const t = csp.total_seven_major, ytd = t.year_to_date, m28 = t.twenty_eight_day, hist = t.historical||{};
@@ -1612,40 +1627,6 @@ async function fetchCrime(ctx){
   h += spark;
   h += `<div class="note">Counted by report date; the police department posts the complaint file quarterly, so its window is the latest covered. CompStat is precinct-wide and weekly; the complaint circle is hyper-local and quarterly.</div>`;
   $('crime').innerHTML = h;
-}
-/* lighting-complaints × violent-crime bivariate class for the surrounding hex */
-const LC_TIER = ['low', 'mid', 'high'];
-function lcLabel(crimeT, lightT){
-  if (crimeT===2 && lightT===2) return {txt:'high violent crime and high lighting complaints — the overlap the bivariate map flags', hot:true};
-  if (crimeT===2 && lightT===0) return {txt:'high violent crime, few lighting complaints'};
-  if (crimeT===0 && lightT===2) return {txt:'many lighting complaints, low violent crime'};
-  return {txt:`${LC_TIER[crimeT]} violent crime, ${LC_TIER[lightT]} lighting complaints`};
-}
-function lightCrimeBlock(ctx){
-  const LC = DATA.lightcrime;
-  if (!LC || typeof h3 === 'undefined') return '';
-  let cell;
-  try{ cell = h3.latLngToCell(ctx.lat, ctx.lng, 9); }catch(e){ return ''; }
-  const v = LC.hexes[cell];
-  const [lightN, crimeN, nightN, lightT, crimeT, nightT] = v || [0,0,0,0,0,0];
-  const day = lcLabel(crimeT, lightT), night = lcLabel(nightT, lightT);
-  let h = `<div class="subhead" style="margin-top:14px">Lighting complaints and violent crime, this block group</div>
-    <div class="row hl" id="lcrow"><span class="k">All hours</span><span class="v" style="${day.hot?'color:#b3382c':''}">${day.txt}<span class="meta">${fmt(crimeN)} violent street crimes · ${fmt(lightN)} streetlight complaints in this ~3 block hex, Jan 2024 to Mar 2026</span></span></div>`;
-  if (night.txt !== day.txt) h += `<div class="row"><span class="k">After dark (8 p.m.–6 a.m.)</span><span class="v" style="${night.hot?'color:#b3382c':''}">${night.txt}<span class="meta">${fmt(nightN)} night-time violent crimes</span></span></div>`;
-  h += `<div class="note" style="margin:2px 0 0">"High" means the top 7% of hexes with any reports; "mid" the next 22%. Violent street crime here counts assault, robbery and murder reported outdoors or in the street. 311 lighting complaints measure what people report, not how dark a street actually is — well-lit blocks with active reporters can rank high, dark blocks nobody reports stay low. <a href="https://vitalcity-nyc.github.io/bivariate-lighting-crime/" target="_blank" rel="noopener">Explore the full bivariate map →</a></div>`;
-  // hover: outline the hex
-  setTimeout(() => {
-    const r = $('lcrow');
-    if (!r) return;
-    r.addEventListener('mouseenter', () => {
-      try{
-        const ring = h3.cellToBoundary(cell).map(([la,ln])=>[ln,la]);
-        showShape({type:'Feature', properties:{}, geometry:{type:'Polygon', coordinates:[[...ring, ring[0]]]}});
-      }catch(e){}
-    });
-    r.addEventListener('mouseleave', clearShape);
-  }, 0);
-  return h;
 }
 function titleCaseOfns(s){
   if (!s) return '—';
@@ -1736,7 +1717,7 @@ async function fetchLore(ctx){
   // nearest landmarks (static)
   const near = DATA.landmarks.map(l => ({name:l[0],lat:l[1],lng:l[2],year:l[3],url:l[4],arch:l[5]||'',d:haversine(lat,lng,l[1],l[2])}))
     .sort((a,b)=>a.d-b.d).slice(0,4).filter(l=>l.d<2500);
-  let h = `<div class="subhead" style="margin-top:0">Nearest individual landmarks</div>`;
+  let h = `<div class="subhead" style="margin-top:0">Nearest city-designated landmarks</div>`;
   if (near.length){
     h += `<ul class="toplist">`+near.map(l=>`<li class="poi" data-lat="${l.lat}" data-lng="${l.lng}" data-name="${esc(l.name)}">
       <span>${l.url?`<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)}</a>`:esc(l.name)}<span class="sub">designated ${esc(l.year)||'—'}${l.arch?' · '+esc(l.arch):''}</span></span>
@@ -1751,7 +1732,7 @@ async function fetchLore(ctx){
     ['https://www.oldnyc.org/', 'Old photos by location (OldNYC)'],
     [`https://digitalcollections.nypl.org/search/index?keywords=${encodeURIComponent((ctx.nta?ctx.nta.properties.ntaname.split('-')[0]:'New York City'))}`, 'NYPL digital collections'],
   ]);
-  h += `<div class="note">Landmark links open the Landmarks Preservation Commission designation report. Wikipedia results are whatever articles are geotagged closest to this point.</div>`;
+  h += `<div class="note">Only properties the Landmarks Preservation Commission has designated as individual landmarks appear here — famous sites without that designation (the Old Stone House, a 1930s reconstruction, for example) will not. Landmark links open the designation report. Wikipedia results are whatever articles are geotagged closest to this point.</div>`;
   el.innerHTML = h;
   el.querySelectorAll('.poi').forEach(li => {
     li.addEventListener('mouseenter', () => showPoi(+li.dataset.lat, +li.dataset.lng, li.dataset.name));
@@ -1819,6 +1800,8 @@ function demographicsBlock(nta, boro){
   h += cmpPct('Renters', D.renter_occ_pct, CITY.renter_occ_pct, BORO?.renter_occ_pct);
   if (D.rs_share_pct != null) h += row('Rent-stabilized units', `${fmt(D.rs_units)}<span class="meta">≈${Math.min(100, D.rs_share_pct).toFixed(0)} per 100 renter households${D.rs_share_pct>100?' (exceeds survey renter count — new stabilized buildings outpace the estimate)':''} · administrative count, mid-2025</span>`);
   h += cmpPct('Rent burdened (30%+ of income)', D.rent_burdened_pct, CITY.rent_burdened_pct, BORO?.rent_burdened_pct);
+  h += cmpPct('Unemployed (of labor force)', D.unemployed_pct, CITY.unemployed_pct, BORO?.unemployed_pct);
+  h += cmpPct('Work from home', D.wfh_pct, CITY.wfh_pct, BORO?.wfh_pct);
   const seg = [['Hispanic', D.hispanic_pct, '#e0762f'], ['White', D.white_nh_pct, '#5b79b8'], ['Black', D.black_nh_pct, '#3f9b76'], ['Asian', D.asian_nh_pct, '#b6539f'], ['Other / two+', null, '#a7a298']];
   const known = seg.slice(0,4).reduce((s,x)=>s+(+x[1]||0),0);
   seg[4][1] = Math.max(0, 100-known);
