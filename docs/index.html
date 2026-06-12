@@ -297,15 +297,15 @@ fetch('data/cityoutline.json').then(r=>r.json()).then(gj => {
 
 const $ = id => document.getElementById(id);
 const LAYERS = {}, DATA = {};
-const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections'];
-const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','lightcrime','worship','colleges','artsvenues','publicart','play','parks','supermarkets','askingrents','transit45'];
+const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections','tracts'];
+const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','lightcrime','worship','colleges','artsvenues','publicart','play','parks','supermarkets','askingrents','transit45','tract_context'];
 let loaded = 0, totalFiles = LAYER_FILES.length + DATA_FILES.length;
 function tick(){
   loaded++;
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '13'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '14'; // bump when files in data/ change, so cached copies refresh
 const ready = Promise.all([
   ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
   ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
@@ -621,13 +621,14 @@ async function inspect(lat, lng, geoFeature=null){
   /* ----- 7 · landmarks and lore (lazy) ----- */
   html += lazySection(7, 'Landmarks and lore', 'lore', 'sec-lore');
   /* ----- 8 · neighborhood numbers ----- */
+  _demoLat = lat; _demoLng = lng;
   html += demographicsBlock(nta, boro);
   /* ----- 9 · crossed indicators ----- */
   html += crossedBlock(nta);
   /* ----- 10 · read more ----- */
   html += readMoreBlock(nta, boro, bbl, zip);
 
-  html += `<div class="pfoot">Boundaries and demographics: New York City Department of City Planning and the United States Census Bureau (American Community Survey 2016-2020). Live feeds: NYC Open Data. Lookups are point-in-polygon against simplified boundaries — addresses sitting exactly on a district line can resolve to the neighbor. <a href="methodology.html">How this all works →</a></div>`;
+  html += `<div class="pfoot">Boundaries: New York City Department of City Planning. Demographics: American Community Survey 2020-2024, aggregated from census tracts. Live feeds: NYC Open Data. Lookups are point-in-polygon against simplified boundaries — addresses sitting exactly on a district line can resolve to the neighbor. <a href="methodology.html">How this all works →</a></div>`;
 
   $('panelbody').innerHTML = html;
   $('panel').classList.add('open');
@@ -735,7 +736,7 @@ function renderCompare(A, B){
       <tr><th></th><th>${esc(A.hood)}<span>${esc(A.label)}</span></th><th>${esc(B.hood)}<span>${esc(B.label)}</span></th><th class="cw">citywide</th></tr>
       ${rows}
     </table>
-    <div class="note" style="margin-top:10px">Demographics: American Community Survey 2016-2020 by neighborhood. Crime and 311 lines appear only if those sections loaded for both points (scroll to the safety section first). <span class="cmpclear">Clear comparison</span></div>`;
+    <div class="note" style="margin-top:10px">Demographics: American Community Survey 2020-2024 by neighborhood. Crime and 311 lines appear only if those sections loaded for both points (scroll to the safety section first). <span class="cmpclear">Clear comparison</span></div>`;
   $('comparewrap').style.display = 'flex';
   document.querySelector('.cmpclear').onclick = () => { comparePin = null; $('comparewrap').style.display='none'; $('comparebtn') && ($('comparebtn').textContent='⇄ Compare'); };
 }
@@ -745,9 +746,10 @@ const BIV_PRESETS = [
   {name:'Income × violent street crime', a:['Median income', d=>d.median_hh_income, money], b:['Violent crime per 1,000 residents', d=>d.pop>200&&d.vcrime_n!=null?d.vcrime_n/d.pop*1000:null, v=>v.toFixed(1)], note:'Crime: outdoor assault, robbery and murder, Jan 2024 to Mar 2026.'},
   {name:'Density × air quality', a:['People per square mile', d=>d.density, fmt], b:['Fine particles (PM2.5)', d=>d.pm25, v=>v+' µg/m³'], note:'Air quality is the surrounding community district\'s 2023 annual average.'},
   {name:'Rent burden × evictions', a:['Rent burdened households', d=>d.rent_burdened_pct, pct], b:['Evictions per 1,000 renter households', d=>d.renter_occ>100&&d.evic_n!=null?d.evic_n/d.renter_occ*1000:null, v=>v.toFixed(1)], note:'Marshal-executed evictions, last 24 months — filings are far more numerous.'},
+  {name:'Rent stabilization × evictions', a:['Rent-stabilized units per 100 renter households', d=>d.renter_occ>100&&d.rs_units!=null?Math.min(100,d.rs_units/d.renter_occ*100):null, v=>v.toFixed(0)], b:['Evictions per 1,000 renter households', d=>d.renter_occ>100&&d.evic_n!=null?d.evic_n/d.renter_occ*1000:null, v=>v.toFixed(1)], note:'Stabilized counts are administrative (mid-2025, via JustFix); where new stabilized buildings outpace survey renter counts the share is capped at 100.'},
   {name:'Poverty × children', a:['Below poverty line', d=>d.poverty_pct, pct], b:['Children under 18', d=>d.under18_pct ?? d.under18_pct_calc, pct], note:'Where both are high, child poverty concentrates.'},
   {name:'Foreign born × limited English', a:['Foreign born', d=>d.foreign_born_pct, pct], b:['Limited English', d=>d.limited_english_pct, pct], note:'High-high areas need language access in city services most.'},
-  {name:'New construction × rent', a:['New building filings per square mile', d=>d.land_sqmi?d.newbuild_n/d.land_sqmi:null, v=>v.toFixed(1)], b:['Median gross rent', d=>d.median_rent, money], note:'Filings are the last 12 months; rent is the 2016-2020 survey.'},
+  {name:'New construction × rent', a:['New building filings per square mile', d=>d.land_sqmi?d.newbuild_n/d.land_sqmi:null, v=>v.toFixed(1)], b:['Median gross rent', d=>d.median_rent, money], note:'Filings are the last 12 months; rent is the 2020-2024 survey.'},
   {name:'Seniors × poverty', a:['Seniors (65 and over)', d=>d.age65pl_pct ?? d.senior_pct_calc, pct], b:['Below poverty line', d=>d.poverty_pct, pct], note:'Where both are high, older New Yorkers are aging in place with thin resources.'},
   {name:'Income × education', a:['Median income', d=>d.median_hh_income, money], b:["Bachelor's degree or higher", d=>d.bachelors_plus_pct, pct], note:'Off-diagonal neighborhoods — educated but lower-income or the reverse — are the interesting ones.'},
 ];
@@ -1815,6 +1817,7 @@ function demographicsBlock(nta, boro){
   h += cmpPct("Bachelor's degree or higher", D.bachelors_plus_pct, CITY.bachelors_plus_pct, BORO?.bachelors_plus_pct);
   h += cmpPct('Limited English', D.limited_english_pct, CITY.limited_english_pct, BORO?.limited_english_pct);
   h += cmpPct('Renters', D.renter_occ_pct, CITY.renter_occ_pct, BORO?.renter_occ_pct);
+  if (D.rs_share_pct != null) h += row('Rent-stabilized units', `${fmt(D.rs_units)}<span class="meta">≈${Math.min(100, D.rs_share_pct).toFixed(0)} per 100 renter households${D.rs_share_pct>100?' (exceeds survey renter count — new stabilized buildings outpace the estimate)':''} · administrative count, mid-2025</span>`);
   h += cmpPct('Rent burdened (30%+ of income)', D.rent_burdened_pct, CITY.rent_burdened_pct, BORO?.rent_burdened_pct);
   const seg = [['Hispanic', D.hispanic_pct, '#e0762f'], ['White', D.white_nh_pct, '#5b79b8'], ['Black', D.black_nh_pct, '#3f9b76'], ['Asian', D.asian_nh_pct, '#b6539f'], ['Other / two+', null, '#a7a298']];
   const known = seg.slice(0,4).reduce((s,x)=>s+(+x[1]||0),0);
@@ -1823,9 +1826,16 @@ function demographicsBlock(nta, boro){
     <div class="racebar">`+seg.map(s=>`<div style="width:${(+s[1]||0)}%;background:${s[2]}" title="${s[0]} ${pct(s[1])}"></div>`).join('')+`</div>
     <div class="racekey">`+seg.map(s=>`<span><i style="background:${s[2]}"></i>${s[0]} ${pct(s[1])}</span>`).join('')+`</div></div>`;
   if (D.mean_commute) h += row('Mean commute', `${D.mean_commute} minutes`);
-  h += `<div class="note">American Community Survey 2016-2020 five year estimates for neighborhood tabulation area ${esc(code)}; density uses City Planning land area. Small-area survey numbers carry real margins of error; treat differences of a few points as noise.</div></section>`;
+  // tract display context: the point's own census tract, shown with its margin of error
+  const tr = lookup(LAYERS.tracts, _demoLat, _demoLng);
+  const tc = tr && DATA.tract_context[tr.properties.geoid];
+  if (tc && tc.inc){
+    h += `<div class="row" style="margin-top:8px"><span class="k">This census tract specifically</span><span class="v">${money(tc.inc)}${tc.moe?` ±${money(tc.moe)}`:''}<span class="meta">median income, tract of ~${fmt(tc.pop)} people${tc.rs?` · ${fmt(tc.rs)} rent-stabilized units`:''}. Tract survey numbers are noisy — the margin shows why the neighborhood figures above are the reliable read.</span></span></div>`;
+  }
+  h += `<div class="note">American Community Survey 2020-2024 five year estimates, aggregated from census tracts to neighborhood tabulation area ${esc(code)} (medians re-interpolated from pooled bracket distributions, not averaged); rent-stabilized counts are administrative, via JustFix from tax filings. Survey numbers carry real margins of error; treat differences of a few points as noise.</div></section>`;
   return h;
 }
+let _demoLat = 0, _demoLng = 0;
 function boroNote(bv, fmtfn){ return bv!=null ? `<span style="font-weight:400;color:#8a8f9e"> · boro ${fmtfn(bv)}</span>` : ''; }
 function cmpPct(label, v, cityv, borov){
   if (v==null) return '';
