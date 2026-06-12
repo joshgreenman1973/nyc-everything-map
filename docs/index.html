@@ -218,6 +218,43 @@ ul.toplist .sub{display:block; font-size:11.5px; color:#8a8f9e; font-weight:400}
   #aipop{bottom:auto; top:60px; left:12px}
   #topsearch{top:60px; left:50%; width:calc(100vw - 24px)}
 }
+
+/* ---------------- print: the profile only, laid out for paper ---------------- */
+@media print {
+  @page { margin: 14mm 14mm 16mm; }
+  html, body { height:auto !important; overflow:visible !important; background:#fff !important; }
+  /* hide everything that isn't the panel */
+  #map, #hero, #topsearch, #loadchip, #aicaution, #aipop, #methlink,
+  #comparewrap, #bivlegend, .leaflet-control-container, #closepanel,
+  #panelbody .toc, .phead .actions, .snapshot .chips a::after { display:none !important; }
+  /* let the panel become a normal flowing document */
+  #panel { position:static !important; transform:none !important; width:100% !important;
+    height:auto !important; max-width:100% !important; box-shadow:none !important; border:0 !important; }
+  #panel .scroller, #panelbody { overflow:visible !important; height:auto !important; }
+  /* header prints as ink-light: dark text on white with a rule, not a navy ink-block */
+  .phead { background:#fff !important; color:var(--ink) !important; padding:0 0 10px !important; border-bottom:3px solid var(--ink); }
+  .phead::after { display:none !important; }
+  .phead .kicker { color:var(--gold-deep) !important; }
+  .phead h2 { color:var(--ink) !important; font-size:24px; }
+  .phead .sub, .phead .sub b { color:var(--ink-soft) !important; }
+  .phead .sub b { color:var(--ink) !important; }
+  /* tighten and de-tint section chrome */
+  section.blk { padding:12px 0 10px !important; border-color:var(--line) !important; break-inside:avoid; }
+  .blk h3 { color:var(--ink) !important; }
+  .snapshot { padding:10px 0 !important; background:transparent !important; border:0 !important; }
+  .snapshot .chips a { border:1px solid var(--line) !important; background:#fff !important; }
+  .row, .statpair, .grades, .cmp, ul.toplist li, .racebar, .morelinks { break-inside:avoid; }
+  .row.hl:hover { background:transparent !important; }
+  a { color:var(--ink) !important; text-decoration:none; }
+  .morelinks a { border:1px solid var(--line) !important; }
+  .pfoot { background:transparent !important; border-top:1px solid var(--line) !important; padding:10px 0 0 !important; }
+  #printfoot { display:block; margin-top:14px; padding-top:10px; border-top:2px solid var(--ink);
+    font-size:10px; color:#555; line-height:1.5; }
+  /* widen the value column a touch since there's a full page now */
+  .row .k { max-width:50% !important; }
+}
+#printfoot { display:none; }
+#printbtn:disabled { opacity:.6; cursor:default; }
 </style>
 </head>
 <body>
@@ -304,7 +341,7 @@ function tick(){
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '19'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '20'; // bump when files in data/ change, so cached copies refresh
 const ready = Promise.all([
   ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
   ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
@@ -505,9 +542,17 @@ async function inspect(lat, lng, geoFeature=null){
   $('topsearch').style.display='block';
   dropPin(lat,lng); clearPoi();
   const z = Math.max(map.getZoom(), 14);
-  const desktop = window.innerWidth > 720;
-  const px = map.project([lat,lng], z);
-  map.flyTo(map.unproject(desktop ? px.subtract([215,0]) : px.add([0,window.innerHeight*0.18]), z), z, {duration:.7});
+  // offset the centering so the panel doesn't cover the pin; guard against a zero-size map
+  try {
+    const sz = map.getSize();
+    if (sz.x > 0 && sz.y > 0){
+      const desktop = window.innerWidth > 720;
+      const px = map.project([lat,lng], z);
+      const target = map.unproject(desktop ? px.subtract([215,0]) : px.add([0, sz.y*0.18]), z);
+      if (isFinite(target.lat) && isFinite(target.lng)) map.flyTo(target, z, {duration:.7});
+      else map.setView([lat,lng], z);
+    } else { map.setView([lat,lng], z); }
+  } catch(e){ try { map.setView([lat,lng], z); } catch(_){} }
 
   let rev = geoFeature, revFailed = false, geoOsm = false;
   if (!rev){ const rr = await reverse(lat,lng); rev = rr.f; revFailed = rr.failed; geoOsm = !!rr.osm; }
@@ -540,6 +585,7 @@ async function inspect(lat, lng, geoFeature=null){
     <div class="actions"><button id="copylink">Copy link</button>
       <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}" target="_blank" rel="noopener">Street View ↗</a>
       <button id="comparebtn">⇄ Compare</button>
+      <button id="printbtn" title="Load every section and open your browser's print dialog (save as PDF or print)">⎙ Print</button>
     </div>
   </div>`;
 
@@ -726,6 +772,8 @@ async function inspect(lat, lng, geoFeature=null){
   $('reach45btn')?.addEventListener('click', e => { e.preventDefault(); show45Reach(ctx); });
   // remaining live chapters load as they scroll into view
   const loaders = {safety: () => fetchSafety(ctx), lot: () => fetchLot(ctx), changing: () => fetchChanging(ctx), lore: () => fetchLore(ctx)};
+  lazyLoaders = loaders;
+  $('printbtn')?.addEventListener('click', () => printProfile(ctx));
   const scroller = $('panelbody');
   function checkLazy(){
     if (stale(ctx)) return;
@@ -1893,6 +1941,29 @@ function readMoreBlock(nta, boro, bbl, zip){
       <a href="https://gothamist.com/search?q=${encodeURIComponent(hood)}" target="_blank" rel="noopener">Gothamist coverage</a>
     </div>
     <div class="note">Searches open prefilled on the outside site using the neighborhood name — skim with judgment.</div></section>`;
+}
+
+let lazyLoaders = null;
+async function printProfile(ctx){
+  const btn = $('printbtn');
+  if (btn){ btn.textContent = '⎙ Preparing…'; btn.disabled = true; }
+  // force every lazy section to load and wait for its live tiles to settle
+  document.querySelectorAll('[data-lazy]').forEach(s => {
+    if (!s.dataset.loaded){ s.dataset.loaded = '1'; lazyLoaders?.[s.dataset.lazy]?.(); }
+  });
+  const start = Date.now();
+  while (document.querySelector('#panelbody .spin') && Date.now() - start < 7000){
+    await new Promise(r => setTimeout(r, 300));
+  }
+  // a print-only footer with the address, date and link (cleaned up afterwards)
+  const old = document.getElementById('printfoot'); if (old) old.remove();
+  const addr = document.querySelector('.phead h2')?.textContent || '';
+  const foot = document.createElement('div');
+  foot.id = 'printfoot';
+  foot.innerHTML = `The Everything Map — profile of ${esc(addr)}. Generated ${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})} from ${location.href.split('#')[0]}#${ctx.lat.toFixed(5)},${ctx.lng.toFixed(5)} · joshgreenman1973.github.io/nyc-everything-map · figures carry the caveats noted in each section; see the methodology page.`;
+  $('panelbody').appendChild(foot);
+  if (btn){ btn.textContent = '⎙ Print'; btn.disabled = false; }
+  window.print();
 }
 
 /* ---------- chrome ---------- */
