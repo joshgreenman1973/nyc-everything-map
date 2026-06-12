@@ -335,14 +335,14 @@ fetch('data/cityoutline.json').then(r=>r.json()).then(gj => {
 const $ = id => document.getElementById(id);
 const LAYERS = {}, DATA = {};
 const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections','tracts','hoods_alt','hoods_whong'];
-const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','worship','colleges','artsvenues','publicart','play','parks','supermarkets','askingrents','transit45','tract_context'];
+const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','worship','colleges','artsvenues','publicart','play','parks','libraries','supermarkets','askingrents','transit45','tract_context'];
 let loaded = 0, totalFiles = LAYER_FILES.length + DATA_FILES.length;
 function tick(){
   loaded++;
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '21'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '22'; // bump when files in data/ change, so cached copies refresh
 const ready = Promise.all([
   ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
   ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
@@ -689,7 +689,7 @@ async function inspect(lat, lng, geoFeature=null){
   html += `<div class="subhead">Colleges nearby</div>` + collegeHtml(lat,lng);
   html += `<div class="subhead">Health</div>` + hospitalHtml(lat,lng);
   html += `<div class="subhead">Faith</div>` + worshipHtml(lat,lng);
-  html += `<div class="subhead">Arts and culture</div>` + artsHtml(lat,lng) + publicArtHtml(lat,lng);
+  html += `<div class="subhead">Arts and culture</div>` + artsHtml(lat,lng) + libraryHtml(lat,lng) + publicArtHtml(lat,lng);
   html += `<div class="subhead">The block, day to day</div>`;
   if (dsny) html += row('Sanitation district', `${esc(dsny.properties.district)}<span class="meta">Department of Sanitation collection district</span>`, 'dsny');
   html += `<div id="c311" style="margin-top:10px"><span class="spin"></span> 311 complaints…</div>
@@ -1190,6 +1190,17 @@ function playHtml(lat,lng){
       <span class="n">${walkmin(x.d)} min</span></li>`).join('')+`</ul>`;
   h += `<div class="note" style="margin:0 0 6px">Parks are real park land (parks department property map, plazas and strips excluded), measured to the park's edge. Play spots are the playground explorer's 6,735 playgrounds, courts, spray showers, pools and recreation centers. Straight-line walk times; entrances can add a block or two.</div>`;
   return h;
+}
+function libraryHtml(lat,lng){
+  const near = DATA.libraries.map(l => ({name:l[0], sys:l[1], lat:l[2], lng:l[3], d:haversine(lat,lng,l[2],l[3])}))
+    .sort((a,b)=>a.d-b.d).slice(0,3).filter(l=>l.d<2500);
+  if (!near.length) return '';
+  return `<div class="row"><span class="k">Nearest libraries</span><span class="v"></span></div>
+    <ul class="toplist">`+near.map(l =>
+    `<li class="poi" data-lat="${l.lat}" data-lng="${l.lng}" data-name="${esc(l.name)}">
+      <span>${esc(l.name)}<span class="sub">${esc(l.sys)}</span></span>
+      <span class="n">${walkmin(l.d)} min</span></li>`).join('')+`</ul>
+    <div class="note" style="margin:0 0 8px">All 227 public library branches (New York, Brooklyn and Queens systems), from the city facilities database. Check the branch for current hours.</div>`;
 }
 function artsHtml(lat,lng){
   const av = DATA.artsvenues.map(x => ({name:x[0], cat:x[1], lat:x[2], lng:x[3], url:x[4], d:haversine(lat,lng,x[2],x[3])}))
