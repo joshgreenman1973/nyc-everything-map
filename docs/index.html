@@ -288,14 +288,14 @@ fetch('data/cityoutline.json').then(r=>r.json()).then(gj => {
 const $ = id => document.getElementById(id);
 const LAYERS = {}, DATA = {};
 const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections'];
-const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','lightcrime','worship','colleges','artsvenues','publicart','play','parks'];
+const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','lightcrime','worship','colleges','artsvenues','publicart','play','parks','supermarkets','askingrents','transit45'];
 let loaded = 0, totalFiles = LAYER_FILES.length + DATA_FILES.length;
 function tick(){
   loaded++;
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '12'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '13'; // bump when files in data/ change, so cached copies refresh
 const ready = Promise.all([
   ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
   ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
@@ -517,7 +517,7 @@ async function inspect(lat, lng, geoFeature=null){
       : `<span class="badge nozone">Not in an evacuation zone</span>`, inZone ? 'hurricane' : null);
   if (aq) html += row('Air quality (2023)', `PM2.5 ${aq.pm25} µg/m³ · NO₂ ${aq.no2} ppb<span class="meta">citywide ${DATA.airquality.city.pm25} and ${DATA.airquality.city.no2} · community district annual averages</span>`);
   if (hvi) html += row('Heat vulnerability', `${hvi} of 5<span class="meta">Health department index for ZIP ${esc(zip)}; 5 = most at risk in heat waves</span>`);
-  html += `<div id="trees"></div>`;
+  html += `<div id="trees"></div><div id="flood"></div>`;
   html += morelinks([
     nta && [`https://popfactfinder.planning.nyc.gov/explorer?geotype=NTA2020&geoids=${esc(nta.properties.nta2020)}`, 'Full census profile'],
     [`https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(hood + ', ' + (boro||'New York City'))}`, `${esc(hood)} on Wikipedia`],
@@ -570,7 +570,11 @@ async function inspect(lat, lng, geoFeature=null){
   /* ----- 3 · living here ----- */
   html += `<section class="blk" id="sec-living"><h3><span class="num">3</span> Living here</h3>`;
   // mobility first (the most universal daily need), then education, health, faith, then block conditions
-  html += `<div class="subhead" style="margin-top:0">Getting around</div>` + subwayHtml(lat,lng) + busHtml(lat,lng) + `<div id="bike"></div>`;
+  html += `<div class="subhead" style="margin-top:0">Getting around</div>` + subwayHtml(lat,lng) + busHtml(lat,lng) + `<div id="bike"></div>
+    <div class="morelinks" style="margin-top:6px"><a href="#" id="reach45btn" style="border-color:var(--gold-deep)">Show my 45-minute transit reach</a>
+    <a href="https://joshgreenman1973.github.io/45-minute-city/" target="_blank" rel="noopener">The full 45-minute city map</a></div>
+    <div id="reach45stat"></div>`;
+  html += `<div class="subhead">Groceries</div>` + supermarketHtml(lat,lng);
   html += `<div class="subhead">Play</div>` + playHtml(lat,lng);
   html += `<div class="subhead">Schools</div>`;
   if (sd) html += row('School district', `District ${+sd.properties.schooldist}`, 'schooldist');
@@ -660,6 +664,8 @@ async function inspect(lat, lng, geoFeature=null){
   }
   fetchLiving(ctx);   // chapter 3's live tiles fire right away
   fetchTrees(ctx);
+  fetchFlood(ctx);
+  $('reach45btn')?.addEventListener('click', e => { e.preventDefault(); show45Reach(ctx); });
   // remaining live chapters load as they scroll into view
   const loaders = {safety: () => fetchSafety(ctx), lot: () => fetchLot(ctx), changing: () => fetchChanging(ctx), lore: () => fetchLore(ctx)};
   const scroller = $('panelbody');
@@ -857,6 +863,88 @@ function collegeHtml(lat,lng){
       <span class="n">${miles(c.d)}</span></li>`).join('') + `</ul>
     <div class="note" style="margin:0 0 6px">From the college map's 173 campuses; enrollment is fall 2022 federal data, the latest compiled there.</div>`;
 }
+function supermarketHtml(lat,lng){
+  const near = DATA.supermarkets.map(s => ({name:s[0], lat:s[1], lng:s[2], d:haversine(lat,lng,s[1],s[2])}))
+    .sort((a,b)=>a.d-b.d).slice(0,3).filter(s=>s.d<2500);
+  if (!near.length) return `<div class="note" style="margin:0 0 6px">No full supermarket in the database within about a 30 minute walk.</div>`;
+  return `<ul class="toplist">`+near.map(s =>
+    `<li class="poi" data-lat="${s.lat}" data-lng="${s.lng}" data-name="${esc(s.name)}">
+      <span>${esc(s.name)}</span><span class="n">${walkmin(s.d)} min</span></li>`).join('')+`</ul>
+    <div class="note" style="margin:0 0 6px">Real supermarkets only: 950 stores from the state's licensed retail-food file, kept when they match a known supermarket operator or carry "supermarket" in their name — the raw file lists every licensed food retailer, breweries and bodegas included, so a name-and-chain filter beats trusting the category. Independents named like delis may be missed.</div>`;
+}
+
+/* flood: live point-in-polygon checks on two city layers */
+async function fetchFlood(ctx){
+  const {lat,lng} = ctx;
+  const pt = `'POINT(${lng} ${lat})'`;
+  try{
+    const [sandy, fp] = await Promise.all([
+      soda('5xsi-dfpx', {'$select':'count(*) as n','$where':`intersects(the_geom, ${pt})`}),
+      soda('27ya-gqtm', {'$select':'count(*) as n','$where':`intersects(the_geom, ${pt})`}),
+    ]);
+    if (stale(ctx) || !$('flood')) return;
+    const inSandy = +(sandy[0]?.n||0) > 0, inFp = +(fp[0]?.n||0) > 0;
+    $('flood').innerHTML = row('Flooding', `${inSandy?'<span class="badge zone1">Flooded during Sandy</span>':'<span class="badge nozone">Did not flood during Sandy</span>'} ${inFp?'<span class="badge zone3">In the 2050s floodplain</span>':''}<span class="meta">Sandy (2012) actual inundation · projected 1-in-100-year coastal floodplain for the 2050s. Street-level stormwater flooding from cloudbursts is a separate risk these layers do not capture.</span>`);
+  }catch(e){ if(!stale(ctx)&&$('flood')) $('flood').innerHTML=''; }
+}
+
+/* 45-minute transit reach, embedding the 45-minute-city engine (subway mode) */
+let reach45Layer = null;
+function show45Reach(ctx){
+  const {lat,lng} = ctx;
+  if (reach45Layer){ map.removeLayer(reach45Layer); reach45Layer = null; }
+  const T = DATA.transit45;
+  const WAIT = T.wait || 180, TRANSFER = 180, MAX = 2700, WALK = 80/60; // m per second
+  const graph = {};
+  T.stations.forEach(s => graph[s.id] = []);
+  for (const [a,b] of T.adjacency){
+    const key = [a,b].sort().join(':');
+    const t = T.times[key] || 120;
+    const ra = T.stations.find(s=>s.id===a)?.r || '';
+    graph[a]?.push({to:b, time:t, route:ra});
+    graph[b]?.push({to:a, time:t, route:ra});
+  }
+  const starts = [];
+  for (const s of T.stations){
+    const wt = haversine(lat,lng,s.lat,s.lng) / WALK;
+    if (wt <= 900) starts.push({id:s.id, startTime: wt + WAIT});
+  }
+  // dijkstra with route-transfer penalty (ported from the 45-minute city)
+  const dist = {}, best = {};
+  const pq = starts.map(x => [x.startTime, x.id, '_']);
+  starts.forEach(x => { dist[x.id+':_'] = x.startTime; best[x.id] = x.startTime; });
+  pq.sort((a,b)=>a[0]-b[0]);
+  while (pq.length){
+    const [d,u,fromR] = pq.shift();
+    if (d > (dist[u+':'+fromR] ?? Infinity) || d > MAX) continue;
+    for (const e of (graph[u]||[])){
+      const r = e.route || '_';
+      const nd = d + e.time + (fromR !== '_' && r !== fromR ? TRANSFER : 0);
+      const k = e.to + ':' + r;
+      if (nd <= MAX && nd < (dist[k] ?? Infinity)){
+        dist[k] = nd;
+        if (nd < (best[e.to] ?? Infinity)) best[e.to] = nd;
+        pq.push([nd, e.to, r]);
+        pq.sort((a,b)=>a[0]-b[0]);
+      }
+    }
+  }
+  const circles = [L.circle([lat,lng], {radius: MAX*WALK, ...R45STYLE})];
+  let reached = 0;
+  for (const s of T.stations){
+    const t = best[s.id];
+    if (t === undefined || t > MAX) continue;
+    reached++;
+    circles.push(L.circle([s.lat,s.lng], {radius: Math.max(120,(MAX-t)*WALK), ...R45STYLE}));
+  }
+  reach45Layer = L.layerGroup(circles).addTo(map);
+  map.fitBounds(L.featureGroup(circles).getBounds(), {padding:[20,20]});
+  if ($('reach45stat')) $('reach45stat').innerHTML =
+    `<div class="note" style="margin:4px 0 6px"><b>${fmt(reached)} of ${T.stations.length} subway stations</b> reachable within 45 minutes from this point (walk + wait + ride + transfers, subway only — the engine behind the 45-minute city map). <span id="reach45clear" style="text-decoration:underline;cursor:pointer">Clear</span></div>`;
+  $('reach45clear')?.addEventListener('click', () => { if(reach45Layer){map.removeLayer(reach45Layer); reach45Layer=null;} $('reach45stat').innerHTML=''; });
+}
+const R45STYLE = {stroke:false, fillColor:'#5698b9', fillOpacity:.25, interactive:false};
+
 function parkDistance(f, lat, lng){
   // 0 if inside; otherwise distance to the nearest boundary vertex (~20 m vertex spacing)
   if (featContains(f, lng, lat)) return 0;
@@ -1029,6 +1117,17 @@ async function fetchLot(ctx){
     fetchHousing(ctx);
   }catch(e){ if (!stale(ctx)) el.innerHTML = `<span class="errnote">Could not reach the live property feed.</span>`; }
 }
+function askingRent(nta){
+  if (!nta || !DATA.askingrents) return null;
+  const byBoro = DATA.askingrents[nta.properties.boroname];
+  if (!byBoro) return null;
+  const full = nta.properties.ntaname.replace(/\([^)]*\)/g,'');
+  for (const cand of [full, ...full.split('-')]){
+    const hit = byBoro[npNorm(cand)];
+    if (hit) return {rent: hit[0], month: new Date(hit[1]+'-15').toLocaleDateString('en-US',{month:'long',year:'numeric'}), area: hit[2]};
+  }
+  return null;
+}
 async function fetchSales(ctx, boroId, block){
   try{
     const rows = await soda('usep-8jbt', {'$select':'address,sale_price,sale_date,building_class_category',
@@ -1038,7 +1137,10 @@ async function fetchSales(ctx, boroId, block){
     if (!rows.length){ $('sales').innerHTML = row('Property sales within ~5 blocks, last 12 months','None recorded'); return; }
     const prices = rows.map(r=>+r.sale_price).sort((a,b)=>a-b);
     const median = prices[Math.floor(prices.length/2)];
-    let h = row('Property sales within ~5 blocks, last 12 months', `${fmt(rows.length)}<span class="meta">median ${money(median)} (all property types mixed)</span>`);
+    let h = '';
+    const ar = askingRent(ctx.nta);
+    if (ar) h += row('Median asking rent', `${money(ar.rent)}<span class="meta">${esc(ar.area)}, ${esc(ar.month)} (StreetEasy listings). Asking rent is what vacant units list for — most tenants, especially in stabilized units, pay less than this.</span>`);
+    h += row('Property sales within ~5 blocks, last 12 months', `${fmt(rows.length)}<span class="meta">median ${money(median)} (all property types mixed)</span>`);
     h += `<ul class="toplist">`+rows.slice(0,3).map(r=>`<li><span>${esc(titleWords(r.address))}<span class="sub">${esc((r.building_class_category||'').replace(/^\d+\s*/,'').toLowerCase())}</span></span><span class="n">${money(r.sale_price)}<span class="sub" style="text-align:right">${monthYear(r.sale_date)}</span></span></li>`).join('')+`</ul>`;
     h += `<div class="note">Department of Finance rolling sales, deed transfers under $10,000 excluded. "Blocks" are tax blocks adjacent in number, which usually but not always means nearby.</div>`;
     $('sales').innerHTML = h;
@@ -1092,7 +1194,9 @@ async function fetchLiving(ctx){
     if (stale(ctx)||!$('c311')) return;
     const total = rows.reduce((s,x)=>s+ +x.n,0);
     ctx.report.c311 = {total};
+    const noise = rows.filter(x=>/^noise/i.test(x.complaint_type||'')).reduce((s,x)=>s+ +x.n,0);
     let h = `<div class="row"><span class="k">311 complaints, last 90 days within 250 meters</span><span class="v bignum">${fmt(total)}</span></div>
+      <div class="row"><span class="k">Of which noise</span><span class="v">${fmt(noise)}${total?`<span class="meta">${Math.round(noise/total*100)}% of all complaints here · citywide, noise is about a fifth of all 311</span>`:''}</span></div>
       <div class="note" style="margin:0 0 6px" id="c311cmp"><span class="spin"></span> comparing to the citywide average…</div>`;
     if (rows.length) h += `<ul class="toplist">`+rows.slice(0,5).map(x=>`<li><span>${esc(x.complaint_type)}</span><span class="n">${fmt(x.n)}</span></li>`).join('')+`</ul>`;
     $('c311').innerHTML = h;
