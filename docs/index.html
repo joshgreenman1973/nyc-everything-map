@@ -25,6 +25,8 @@ body{font-family:'Archivo',sans-serif; color:var(--ink); background:var(--paper)
 #hero{position:absolute; z-index:1000; left:50%; top:12%; transform:translateX(-50%);
   width:min(620px, calc(100vw - 32px)); text-align:center; pointer-events:none; transition:opacity .45s, transform .45s}
 #hero.hidden{opacity:0; transform:translateX(-50%) translateY(-24px); pointer-events:none !important}
+/* once hidden, the (invisible) card and its inputs must stop swallowing map clicks */
+#hero.hidden, #hero.hidden *{pointer-events:none !important}
 #hero .card{pointer-events:auto; background:var(--white); border:2px solid var(--ink); border-radius:14px;
   box-shadow:var(--shadow); padding:30px 30px 24px}
 #hero h1{font-family:'Fraunces',serif; font-weight:900; font-size:clamp(30px,5vw,44px); line-height:1.02; letter-spacing:-.01em}
