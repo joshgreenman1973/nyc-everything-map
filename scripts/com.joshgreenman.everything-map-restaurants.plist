@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Everything Map: monthly refresh of the "Eating nearby" restaurant data.
+     Pulls fresh DOHMH restaurant-inspection data, rebuilds
+     docs/data/restaurants.json, and pushes to origin/main (live GitHub Pages)
+     only if the data changed. Notifies via iMessage. Runs the 1st of each
+     month at 06:30 local time.
+     Install / activate:
+       launchctl load -w ~/Library/LaunchAgents/com.joshgreenman.everything-map-restaurants.plist
+     Run once now:
+       launchctl start com.joshgreenman.everything-map-restaurants -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.joshgreenman.everything-map-restaurants</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/joshgreenman/Experiments/nyc-everything-map/scripts/refresh_restaurants.py</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Day</key><integer>1</integer>
+    <key>Hour</key><integer>6</integer>
+    <key>Minute</key><integer>30</integer>
+  </dict>
+  <key>WorkingDirectory</key>
+  <string>/Users/joshgreenman/Experiments/nyc-everything-map</string>
+  <key>StandardOutPath</key>
+  <string>/Users/joshgreenman/Experiments/nyc-everything-map/scripts/refresh.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/joshgreenman/Experiments/nyc-everything-map/scripts/refresh.log</string>
+</dict>
+</plist>
