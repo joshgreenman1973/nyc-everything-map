@@ -116,16 +116,16 @@ def build():
     except Exception as e:  # noqa: BLE001
         print(f"  warning: grade pull failed ({e}); grades left blank", file=sys.stderr)
 
-    # 3) Assemble compact output
-    cuisines, ci_idx, city = [], {}, []
+    # 3) Assemble compact output. Sort everything deterministically so identical
+    #    data always serializes byte-for-byte the same way — the API returns rows
+    #    in an arbitrary order, and the refresh job only commits on real change.
+    cuisines = sorted({e["cuisine"] for e in est.values()})
+    ci_idx = {c: i for i, c in enumerate(cuisines)}
+    city = [0] * len(cuisines)
     pts = []
-    for cm, e in est.items():
-        c = e["cuisine"]
-        if c not in ci_idx:
-            ci_idx[c] = len(cuisines)
-            cuisines.append(c)
-            city.append(0)
-        ci = ci_idx[c]
+    for cm in sorted(est):  # by CAMIS — stable across runs
+        e = est[cm]
+        ci = ci_idx[e["cuisine"]]
         city[ci] += 1
         pts.append([e["lat"], e["lng"], ci, e["name"], grade.get(cm, "")])
 

@@ -15,6 +15,12 @@ REPO = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
 DATA = os.path.join(REPO, "docs", "data", "restaurants.json")
 BUILD = os.path.join(REPO, "scripts", "build_restaurants.py")
 IMESSAGE_TO = "9175823254"  # per Josh's standing notification preference
+# This repo belongs to joshgreenman1973, but the machine may have another GitHub
+# account (e.g. vitalcity-nyc) set active. Push with this account's token
+# explicitly so the unattended job never pushes (or fails) as the wrong account.
+GH = "/Users/joshgreenman/.local/bin/gh"
+GH_USER = "joshgreenman1973"
+REPO_SLUG = "joshgreenman1973/nyc-everything-map"
 
 
 def git(*args, check=True):
@@ -32,6 +38,26 @@ def notify(body):
         subprocess.run(["/usr/bin/osascript", "-e", script], check=True, timeout=30)
     except Exception as e:  # noqa: BLE001
         print(f"iMessage send failed: {e}", file=sys.stderr)
+
+
+def push_as_owner():
+    """git push origin main, authenticating as the repo owner regardless of which
+    GitHub account is currently 'active' on the machine. Falls back to a plain
+    push if the per-account token can't be retrieved."""
+    try:
+        tok = subprocess.run([GH, "auth", "token", "--user", GH_USER],
+                             capture_output=True, text=True, timeout=20)
+        token = tok.stdout.strip()
+    except Exception:  # noqa: BLE001
+        token = ""
+    if token:
+        url = f"https://x-access-token:{token}@github.com/{REPO_SLUG}.git"
+        res = git("push", url, "HEAD:main", check=False)
+        # never let the token reach the log
+        res.stdout = res.stdout.replace(token, "***")
+        res.stderr = res.stderr.replace(token, "***")
+        return res
+    return git("push", "origin", "main", check=False)
 
 
 def signature(path):
@@ -69,7 +95,7 @@ def main():
     git("add", "docs/data/restaurants.json")
     git("commit", "-m",
         f"Refresh Eating-nearby restaurant data ({total} restaurants) [skip ci]")
-    push = git("push", "origin", "main", check=False)
+    push = push_as_owner()
     if push.returncode == 0:
         print("pushed")
         notify(f"Everything Map: restaurant data refreshed - {total:,} restaurants, "
