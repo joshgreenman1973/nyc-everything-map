@@ -194,6 +194,13 @@ ul.toplist .sub{display:block; font-size:11.5px; color:#8a8f9e; font-weight:400}
 .statpair .g b{font-family:'Fraunces',serif; font-size:20px; display:block}
 .statpair .g span{font-size:10.5px; color:#8a8f9e; line-height:1.3; display:block}
 .subhead{font:700 11px 'Archivo'; letter-spacing:.1em; text-transform:uppercase; color:#8a8f9e; margin:16px 0 4px}
+/* cuisine mix bars (eating nearby) */
+.cbars{margin:8px 0 2px}
+.cbar{display:grid; grid-template-columns:92px 1fr 24px; align-items:center; gap:8px; padding:2.5px 0; font-size:12.5px}
+.cbar .cbl{color:var(--ink-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.cbar .cbt{height:11px; background:var(--paper-deep); border-radius:999px; overflow:hidden}
+.cbar .cbf{display:block; height:100%; background:var(--gold); border-radius:999px}
+.cbar .cbn{text-align:right; font-weight:700; font-variant-numeric:tabular-nums}
 
 .pfoot{padding:16px 26px 22px; background:var(--paper-deep); border-top:1.5px solid var(--line); font-size:11.5px; color:var(--ink-soft); line-height:1.55}
 .pfoot a{color:var(--ink); font-weight:600}
@@ -337,14 +344,14 @@ fetch('data/cityoutline.json').then(r=>r.json()).then(gj => {
 const $ = id => document.getElementById(id);
 const LAYERS = {}, DATA = {};
 const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections','tracts','hoods_alt','hoods_whong'];
-const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','worship','colleges','artsvenues','publicart','play','parks','libraries','supermarkets','askingrents','transit45','tract_context'];
+const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','worship','colleges','artsvenues','publicart','play','parks','libraries','supermarkets','askingrents','transit45','tract_context','restaurants'];
 let loaded = 0, totalFiles = LAYER_FILES.length + DATA_FILES.length;
 function tick(){
   loaded++;
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '22'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '23'; // bump when files in data/ change, so cached copies refresh
 const ready = Promise.all([
   ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
   ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
@@ -680,6 +687,7 @@ async function inspect(lat, lng, geoFeature=null){
     <div class="morelinks" style="margin-top:6px"><a href="#" id="reach45btn" style="border-color:var(--gold-deep)">Show my 45-minute transit reach</a></div>
     <div id="reach45stat"></div>`;
   html += `<div class="subhead">Groceries</div>` + supermarketHtml(lat,lng);
+  html += `<div class="subhead">Eating nearby</div>` + cuisineHtml(lat,lng);
   html += `<div class="subhead">Play</div>` + playHtml(lat,lng);
   html += `<div class="subhead">Schools</div>`;
   if (sd) html += row('School district', `District ${+sd.properties.schooldist}`, 'schooldist');
@@ -943,6 +951,10 @@ function snapshotBlock(lat, lng, nta, boro){
   chip('sec-living','Parks ≤10 min', String(parks.length));
   const market = DATA.supermarkets.map(s=>haversine(lat,lng,s[1],s[2])).sort((a,b)=>a-b)[0];
   if (market != null && market < 4000) chip('sec-living','Supermarket', walkmin(market)+' min');
+  if (DATA.restaurants?.pts){
+    let rc = 0; for (const p of DATA.restaurants.pts){ if (haversine(lat,lng,p[0],p[1]) <= 800) rc++; }
+    if (rc) chip('sec-living','Restaurants ≤10 min', fmt(rc));
+  }
   // crime rate vs city (NTA-level, 2024-Mar 2026 violent street crime)
   const cr = cityVcrimeRate();
   if (cr && D.vcrime_n != null){
@@ -1062,6 +1074,55 @@ function supermarketHtml(lat,lng){
     `<li class="poi" data-lat="${s.lat}" data-lng="${s.lng}" data-name="${esc(s.name)}">
       <span>${esc(s.name)}</span><span class="n">${walkmin(s.d)} min</span></li>`).join('')+`</ul>
     <div class="note" style="margin:0 0 6px">Real supermarkets only: 950 stores from the state's licensed retail-food file, kept when they match a known supermarket operator or carry "supermarket" in their name — the raw file lists every licensed food retailer, breweries and bodegas included, so a name-and-chain filter beats trusting the category. Independents named like delis may be missed.</div>`;
+}
+// what is on the plate within a short walk — counts and character from the restaurant-cuisine dataset
+const CUISINE_GENERIC = new Set(['', 'Other', 'Not Listed/Not Applicable']);
+function cuisineHtml(lat,lng){
+  const R = DATA.restaurants;
+  if (!R || !R.pts) return '';
+  const RAD = 800; // ~10 minute walk, straight line
+  const near = [];
+  for (const p of R.pts){
+    const d = haversine(lat,lng,p[0],p[1]);
+    if (d <= RAD) near.push({lat:p[0], lng:p[1], ci:p[2], name:p[3], grade:p[4], d});
+  }
+  if (!near.length) return `<div class="note" style="margin:0 0 6px">No restaurants from the city's inspection file within about a 10 minute walk of this point.</div>`;
+  const label = ci => R.cuisines[ci] || 'Unlabeled';
+  const total = near.length;
+
+  // counts by cuisine, excluding the non-cuisine buckets from the breakdown
+  const cnt = {};
+  near.forEach(p => { cnt[p.ci] = (cnt[p.ci]||0) + 1; });
+  const ranked = Object.keys(cnt).map(ci => ({ci:+ci, c:cnt[ci], label:label(+ci)}))
+    .filter(x => !CUISINE_GENERIC.has(R.cuisines[x.ci]))
+    .sort((a,b) => b.c - a.c);
+  const top = ranked.slice(0,6);
+  const max = top.length ? top[0].c : 1;
+  const bars = top.map(x =>
+    `<div class="cbar"><span class="cbl">${esc(x.label)}</span><span class="cbt"><span class="cbf" style="width:${Math.max(6,Math.round(100*x.c/max))}%"></span></span><span class="cbn">${x.c}</span></div>`).join('');
+
+  // what the area stands out for: local share vs the citywide share of each cuisine
+  const stand = ranked.map(x => {
+    const localShare = x.c / total;
+    const cityShare = R.city[x.ci] / R.cityTotal;
+    return {...x, ratio: cityShare > 0 ? localShare/cityShare : 0};
+  }).filter(x => x.c >= 4 && x.ratio >= 1.8).sort((a,b) => b.ratio - a.ratio).slice(0,3);
+  const standLine = stand.length
+    ? `<div class="note" style="margin:6px 0 8px">Stands out for <b>${stand.map(s=>esc(s.label)).join('</b>, <b>')}</b> — more concentrated here than in the city as a whole.</div>`
+    : '';
+
+  // a few nearest named spots (skip the generic-label ones so the list reads as cuisine)
+  const picks = near.slice().sort((a,b)=>a.d-b.d)
+    .filter(p => !CUISINE_GENERIC.has(R.cuisines[p.ci])).slice(0,5);
+  const li = p => `<li class="poi" data-lat="${p.lat}" data-lng="${p.lng}" data-name="${esc(p.name)}">
+    <span>${esc(p.name)}<span class="sub">${esc(label(p.ci))}${p.grade?` · grade ${esc(p.grade)}`:''}</span></span>
+    <span class="n">${walkmin(p.d)} min</span></li>`;
+
+  return `<div class="row"><span class="k">Restaurants within a 10 minute walk</span><span class="v bignum">${fmt(total)}</span></div>
+    ${bars ? `<div class="cbars">${bars}</div>` : ''}
+    ${standLine}
+    ${picks.length ? `<ul class="toplist">${picks.map(li).join('')}</ul>` : ''}
+    <div class="note" style="margin:0 0 6px">Every establishment in the city's restaurant-inspection file (${fmt(R.cityTotal)} citywide), counted once. "Cuisine" is a single coarse label the owner self-reports from a fixed city list, so it flattens regional cooking ("Chinese" covers every region; "Spanish" here means Spanish-Caribbean/Latino food) and roughly a tenth are blank or "Other" — the breakdown leaves those out. "Stands out for" compares this spot's cuisine mix to the citywide mix.</div>`;
 }
 
 /* flood: live point-in-polygon checks on two city layers */

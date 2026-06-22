@@ -1,6 +1,6 @@
 # The Everything Map
 
-Pick any point in the five boroughs of New York City — type an address or click the map — and get a full report on it: neighborhood, community district, every elected official who represents it, police precinct, sanitation district, school district and zoned schools, hurricane evacuation zone, historic district status, live property records (zoning, year built, owner, floor area ratio), live 311 and crime activity nearby, restaurant inspection grades, nearest subway stations and an American Community Survey demographic profile compared against citywide figures.
+Pick any point in the five boroughs of New York City — type an address or click the map — and get a full report on it: neighborhood, community district, every elected official who represents it, police precinct, sanitation district, school district and zoned schools, hurricane evacuation zone, historic district status, live property records (zoning, year built, owner, floor area ratio), live 311 and crime activity nearby, restaurant inspection grades, the mix of restaurant cuisines within a 10 minute walk, nearest subway stations and an American Community Survey demographic profile compared against citywide figures.
 
 A single static page; all boundary lookups run in the browser, four NYC Open Data feeds are queried live at click time.
 
