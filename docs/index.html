@@ -314,7 +314,7 @@ ul.toplist .sub{display:block; font-size:11.5px; color:#8a8f9e; font-weight:400}
 <button id="aicaution">⚠ AI caution</button>
 <div id="aipop">
   <h4>Read this before you rely on the map</h4>
-  This site was built with AI assistance. Quality checks that were done: boundary lookups were validated against 900 New York Police Department records and 880 311 records (99.8%+ agreement net of records the city itself labels differently); every elected official was checked against an official or maintained public source in June 2026; demographic figures were spot-checked against published American Community Survey tables. Quality checks that were <b>not</b> done: not every possible lookup has been human-reviewed, live feeds are shown as the city publishes them, school data carries the vintages noted in each section and zoned school assignments change. Verify anything consequential with the agency itself. <a href="methodology.html">Full methodology</a>.
+  This site was built with AI assistance. Quality checks that were done: boundary lookups were validated against about 900 police complaint records and about 900 recent 311 records, with simplification error under 0.3% (nearly all remaining mismatches are records the city itself labels differently, or points sitting exactly on a boundary line); every elected official was checked against an official or maintained public source in June 2026; demographic figures were spot-checked against published American Community Survey tables. Quality checks that were <b>not</b> done: not every possible lookup has been human-reviewed, live feeds are shown as the city publishes them, school data carries the vintages noted in each section and zoned school assignments change. Verify anything consequential with the agency itself. <a href="methodology.html">Full methodology</a>.
 </div>
 <a id="methlink" href="methodology.html">Methodology</a>
 
@@ -896,7 +896,7 @@ function crossedBlock(nta){
   if (!rows) return '';
   return `<section class="blk" id="sec-crossed"><h3><span class="num">9</span> Two factors at once</h3>
     <ul class="toplist" style="margin-top:0">${rows}</ul>
-    <div class="note">Each pairing classes this neighborhood low, mid or high on two indicators at once (terciles across all neighborhoods). "Map" paints the whole city by that pairing so you can see where this point sits in the pattern. Crossing two indicators shows correlation, not cause.</div></section>`;
+    <div class="note">Each pairing classes this neighborhood low, mid or high on two indicators at once (terciles across all neighborhoods). "Map" paints the whole city by that pairing so you can see where this point sits in the pattern. Crossing two indicators shows correlation, not cause, and the three-way classing hides all the variation within each third.</div></section>`;
 }
 function showBivMap(i){
   clearBivMap();
@@ -968,7 +968,7 @@ function snapshotBlock(lat, lng, nta, boro){
   // crime rate vs city (NTA-level, 2024-Mar 2026 violent street crime)
   const cr = cityVcrimeRate();
   if (cr && D.vcrime_n != null){
-    chip('sec-safety','Violent crime', ((D.vcrime_n/D.pop*1000)/cr).toFixed(1)+'× city rate');
+    chip('sec-safety','Violent street crime', ((D.vcrime_n/D.pop*1000)/cr).toFixed(1)+'× city rate');
   }
   if (D.median_hh_income) chip('sec-numbers','Median income', money(D.median_hh_income));
   const ar = askingRent(nta);
@@ -976,33 +976,30 @@ function snapshotBlock(lat, lng, nta, boro){
   else if (D.median_rent) chip('sec-numbers','Survey rent', money(D.median_rent));
   if (D.density) chip('sec-numbers','Density', (D.density/CITY.density).toFixed(1)+'× city');
 
-  // guarded plain-language sentence — only clauses the data supports
-  const parts = [];
-  const dw = ratioWord(D.density/CITY.density, 'denser than most of the city', 'less dense than most of the city');
-  if (dw) parts.push(dw);
-  if (sub != null) parts.push(sub <= 500 ? 'with the subway close at hand' : sub > 1600 ? 'far from the subway' : null);
+  // guarded plain-language sentence — only clauses the data supports.
+  // Each clause is either an adjective phrase (reads after "is") or a noun phrase
+  // (reads after "has"); grouping them keeps the sentence grammatical in every
+  // combination — a bare "is incomes well above…" is the failure we avoid.
+  const isParts = [], hasParts = [];
+  // density compares to the citywide average density (a ratio, not a percentile) — word it that way
+  const dw = ratioWord(D.density/CITY.density, 'denser than the city overall', 'less dense than the city overall');
+  if (dw) isParts.push(dw);
+  if (sub != null){ if (sub <= 500) hasParts.push('the subway close at hand'); else if (sub > 1600) isParts.push('far from the subway'); }
   const iw = D.median_hh_income && ratioWord(D.median_hh_income/CITY.median_hh_income, 'incomes well above the city median', 'incomes well below the city median');
-  if (iw) parts.push(iw);
+  if (iw) hasParts.push(iw);
   if (cr && D.vcrime_n != null){
     const crw = ratioWord((D.vcrime_n/D.pop*1000)/cr, 'reported violent street crime above the citywide rate', 'reported violent street crime below the citywide rate');
-    if (crw) parts.push(crw);
+    if (crw) hasParts.push(crw);
   }
   const u18 = D.under18_pct ?? D.under18_pct_calc;
   const aw = u18 && ratioWord(u18/CITY.under18_pct, 'more children than the city average', 'fewer children than the city average');
-  if (aw) parts.push(aw);
-  const clauses = parts.filter(Boolean);
-  // "is" only works when the leading clause is an adjective phrase (density, "far from the subway");
-  // if a "with …"/noun clause would lead, switch frames so the sentence stays grammatical
-  const isLead = c => c && !c.startsWith('with ');
-  let sentence = '';
-  if (clauses.length >= 2){
-    if (isLead(clauses[0])){
-      sentence = `${esc(nta.properties.ntaname)} is ${clauses[0]}, ${clauses.slice(1).join(', ')} — all of it from the numbers and caveats below.`;
-    } else {
-      const rest = [clauses[0].replace(/^with /,''), ...clauses.slice(1)];
-      sentence = `${esc(nta.properties.ntaname)} has ${rest.join(', ')} — all of it from the numbers and caveats below.`;
-    }
-  }
+  if (aw) hasParts.push(aw);
+  const frames = [];
+  if (isParts.length) frames.push('is ' + isParts.join(', '));
+  if (hasParts.length) frames.push('has ' + hasParts.join(', '));
+  const sentence = (isParts.length + hasParts.length) >= 2
+    ? `${esc(nta.properties.ntaname)} ${frames.join(' and ')} — all of it from the numbers and caveats below.`
+    : '';
 
   return `<div class="snapshot">
     ${sentence ? `<p>${sentence}</p>` : ''}
@@ -1073,7 +1070,7 @@ function hospitalHtml(lat,lng){
     <span class="n">${miles(h.d)}</span></li>`;
   return `<div class="row"><span class="k">Nearest hospitals</span><span class="v"></span></div>
     <ul class="toplist">` + picks.map(li).join('') + `</ul>
-    <div class="note" style="margin:0 0 4px">All licensed hospital campuses and freestanding emergency departments in the state health department's facility file, straight-line distances. In an emergency call 911, which routes to the right place.</div>`;
+    <div class="note" style="margin:0 0 4px">All licensed hospital campuses and freestanding emergency departments in the state health department's facility file, straight-line distances. Emergency-room status is hand-checked and can change as departments open and close — verify before relying on it. In an emergency call 911, which routes to the right place.</div>`;
 }
 function collegeHtml(lat,lng){
   const near = DATA.colleges.map(c => ({name:c[0], lat:c[1], lng:c[2], total:c[3], control:c[4], url:c[5], d:haversine(lat,lng,c[1],c[2])}))
@@ -1453,6 +1450,7 @@ async function fetchHousing(ctx){
     const units = ah.reduce((s,x)=>s+ +(+x.units||0),0);
     h += row('City-financed affordable housing nearby, last 5 years', `${fmt(units)} units<span class="meta">largest: ${esc(titleWords(ah[0].project_name||''))}</span>`);
   }
+  if (ev || (ah && ah.length)) h += `<div class="note" style="margin:0">Evictions counted are marshal-executed only — the end of the process; filings, which are far more numerous, are not in this feed. Affordable-housing units are city-financed projects only.</div>`;
   $('housing').innerHTML = h;
 }
 async function fetchHpd(ctx, boroId, block, lot, unitsres){
@@ -1525,7 +1523,7 @@ async function fetchLiving(ctx){
     if (stale(ctx)||!$('rats')) return;
     const total = rows.reduce((s,x)=>s+ +x.n,0);
     if (!total){ $('rats').innerHTML = ''; return; }
-    const isActive = x => /rat activity|failed/i.test(x.result||'');
+    const isActive = x => /rat activity/i.test(x.result||''); // only true rat-activity findings, not "Failed for Other Reason" (conducive conditions)
     const active = rows.filter(isActive).reduce((s,x)=>s+ +x.n,0);
     const localRate = active/total*100;
     let cmp = '';
@@ -1556,7 +1554,7 @@ function cityRatRate(){
       '$where':`inspection_date > '${daysAgoISO(365)}'`,'$group':'result'})
     .then(rows => {
       const total = rows.reduce((s,x)=>s+ +x.n,0);
-      const active = rows.filter(x=>/rat activity|failed/i.test(x.result||'')).reduce((s,x)=>s+ +x.n,0);
+      const active = rows.filter(x=>/rat activity/i.test(x.result||'')).reduce((s,x)=>s+ +x.n,0);
       return total ? active/total*100 : null;
     }).catch(()=>null);
   return _cityRats;
@@ -1888,7 +1886,7 @@ async function fetchChanging(ctx){
       soda('tg4x-b46p',{'$select':'category,subcategoryname,startdatetime,parkingheld',
         '$where':`zipcode_s LIKE '%${zip}%' AND startdatetime > '${daysAgoISO(180)}' AND eventtype='Shooting Permit'`,
         '$order':'startdatetime DESC','$limit':5}),
-      feedMax('tg4x-b46p','startdatetime'),
+      feedMax('tg4x-b46p','enteredon'),  // when a permit was filed, not its (often future) shoot date — a true "data through" signal
     ]).then(([rows, mx]) => {
       if (stale(ctx)||!$('film')) return;
       const lag = feedLagNote(mx);
