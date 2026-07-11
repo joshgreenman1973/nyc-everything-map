@@ -36,7 +36,7 @@ code{background:#efe9da; border-radius:4px; padding:1px 6px; font-size:13px}
 <h2>What the map does</h2>
 <p>When you search an address or click a point, the site does three things:</p>
 <ul>
-<li><b>Geocoding.</b> Addresses are matched with the Department of City Planning's free <a href="https://geosearch.planninglabs.nyc/">GeoSearch</a> service, which also supplies the tax lot number (borough-block-lot, or BBL) for property lookups. Map clicks are reverse geocoded to the nearest address point; when that point is more than 40 meters away the panel says so.</li>
+<li><b>Geocoding.</b> Addresses are matched with the Department of City Planning's free <a href="https://geosearch.planninglabs.nyc/">GeoSearch</a> service, which also supplies the tax lot number (borough-block-lot, or BBL) for property lookups. Map clicks are reverse geocoded to the nearest address point; when that point is more than 40 meters away the panel says so. If GeoSearch is briefly unreachable from your browser, the site falls back to <a href="https://nominatim.openstreetmap.org/">OpenStreetMap's Nominatim</a> geocoder for the address only — the panel says so, and the property lookups that need a tax lot number (this lot, sales, housing violations) are unavailable until the city geocoder is back, because OpenStreetMap does not supply one.</li>
 <li><b>Boundary lookups.</b> The point is tested against 17 boundary files stored with the site (point-in-polygon, computed in your browser), from neighborhoods and council districts to election districts and census tracts. Nothing is sent to a server for this step.</li>
 <li><b>Live queries.</b> Seventeen NYC Open Data feeds — property records, 311, crime (current and historic), crashes, street trees, restaurant and rodent inspections, building filings, business licenses, evictions, affordable housing, film permits, property sales, housing violations and two flood layers — plus the weekly CompStat scrape, Wikipedia, the federal elevation service and the Citi Bike feed are queried at the moment you click. Sections load as you scroll, to be polite to the city's servers, and each says so if its feed is briefly unavailable.</li>
 </ul>
@@ -94,12 +94,12 @@ code{background:#efe9da; border-radius:4px; padding:1px 6px; font-size:13px}
 </table>
 
 <h3>Accuracy check</h3>
-<p>The lookup machinery was validated against city records that carry both coordinates and an official district label:</p>
+<p>The lookup machinery is validated against city records that carry both coordinates and an official district label, by the <code>validate_lookups.py</code> script in the project repository — so anyone can reproduce these figures. The sampled records come from live feeds, so the exact tallies shift a little each run; the latest run gave:</p>
 <ul>
-<li><b>Police precincts:</b> 900 randomly drawn complaint records. 873 matched the precinct on the record. Of the 27 disagreements, 25 were cases where the police department's own label differs from the official precinct map at that coordinate (complaints are sometimes filed to a precinct other than where the dot falls, and many dots are snapped to street centerlines that are themselves the boundary). Only 2 of 900 — both on the same Brooklyn boundary street — were caused by our simplified geometry, an error rate of about 0.2% concentrated entirely on points sitting exactly on a district line.</li>
-<li><b>Community districts:</b> 880 randomly drawn 311 records, 99.5% agreement, with the handful of mismatches again on boundary lines plus Marble Hill, the Manhattan neighborhood on the Bronx side of the Harlem River that agencies code inconsistently.</li>
+<li><b>Police precincts:</b> 900 complaint records drawn from the NYPD file. 873 matched the precinct on the record. Of the 27 disagreements, 25 were cases where the police department's own label differs from the official precinct map at that coordinate (complaints are sometimes filed to a precinct other than where the dot falls, and many dots are snapped to street centerlines that are themselves the boundary). Only 2 of 900 — both on the same Brooklyn boundary street — were caused by our simplified geometry, an error rate of about 0.2% concentrated entirely on points sitting exactly on a district line.</li>
+<li><b>Community districts:</b> about 900 recent 311 records (a rolling 40-day window, so the count moves), roughly 99% agreement — the latest run was 887 of 896. The handful of mismatches are again on boundary lines, plus Marble Hill, the Manhattan neighborhood on the Bronx side of the Harlem River that agencies code inconsistently. None in the latest run were caused by our simplified geometry.</li>
 </ul>
-<p>Practical upshot: if an address sits directly on a district boundary, the map can return the district on the other side of the street. Everywhere else it agrees with the city's own files.</p>
+<p>Practical upshot: if an address sits directly on a district boundary, the map can return the district on the other side of the street. Everywhere else it agrees with the city's own files. A simplification-error rate above 1% blocks a deploy.</p>
 
 <h2>Elected officials</h2>
 <ul>
@@ -145,6 +145,7 @@ code{background:#efe9da; border-radius:4px; padding:1px 6px; font-size:13px}
 <tr><td>Elevation</td><td><a href="https://www.usgs.gov/3d-elevation-program">United States Geological Survey elevation point query service</a></td><td>Ground elevation at the clicked point, shown in feet.</td></tr>
 </table>
 <p>Live sections load as you scroll to them rather than all at once, to be polite to the city's servers. Everything is shown with its vintage; if a feed is briefly unavailable the panel says so.</p>
+<p>Some city feeds quietly stop updating for weeks or months at a time — the business-license and film-permit feeds are recurring offenders. For the feeds most prone to this, the panel checks the newest record each feed actually contains and, when it trails well behind today, prints the month the data really runs through (for example "the city's feed currently runs only through April 2026") instead of implying a rolling window that runs to the present. A quiet stretch in these feeds means the city stopped publishing, not that nothing happened at your point.</p>
 <p>Live queries hit NYC Open Data without an application token, which the city rate-limits but allows. If a feed is briefly unavailable the panel says so rather than showing stale numbers.</p>
 
 <h2>Other lookups</h2>
@@ -170,7 +171,7 @@ code{background:#efe9da; border-radius:4px; padding:1px 6px; font-size:13px}
 </ul>
 
 <h2>Code and contact</h2>
-<p>The site is a single static page; the full pipeline (download, simplification, validation and extraction scripts) lives in the project repository. Built with Leaflet, mapshaper, City Planning GeoSearch and NYC Open Data. Built with AI assistance and human review; corrections are welcome.</p>
+<p>The site is a single static page; the full pipeline (download, simplification, validation and extraction scripts) lives in the project repository. Built with Leaflet, mapshaper, City Planning GeoSearch and NYC Open Data, on a CARTO basemap drawn from OpenStreetMap data. Built with AI assistance and human review; corrections are welcome.</p>
 </main>
 </body>
 </html>
