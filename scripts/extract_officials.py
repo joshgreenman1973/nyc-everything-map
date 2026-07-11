@@ -30,7 +30,7 @@ BOROUGH = {
     'Bronx':         {'bp': 'Vanessa Gibson',     'da': 'Darcel Clark'},
     'Staten Island': {'bp': 'Vito Fossella',      'da': 'Michael McMahon'},
 }
-LEADERSHIP_PREFIXES = ('Speaker ', 'Majority Leader ', 'Majority Whip ',
+LEADERSHIP_PREFIXES = ('Deputy Speaker ', 'Speaker ', 'Majority Leader ', 'Majority Whip ',
                        'Minority Leader ', 'Minority Whip ')
 
 def council():

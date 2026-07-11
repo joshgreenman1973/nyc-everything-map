@@ -351,7 +351,7 @@ function tick(){
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '23'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '25'; // bump when files in data/ change, so cached copies refresh
 const ready = Promise.all([
   ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
   ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
@@ -530,13 +530,23 @@ function precinctUrl(n){
   if (n===18) return 'https://www.nyc.gov/site/nypd/bureaus/patrol/precincts/midtown-north-precinct.page';
   return `https://www.nyc.gov/site/nypd/bureaus/patrol/precincts/${ordinal(n)}-precinct.page`;
 }
+let _schoolNames = null;
+function schoolName(dbn){
+  if (!_schoolNames){
+    _schoolNames = {};
+    for (const s of DATA.schools || []) _schoolNames[s[0]] = s[1];
+  }
+  return _schoolNames[dbn] || null;
+}
 function schoolLinks(p){
   const dbns = (p.dbn||'').split(',');
   const links = dbns.filter(Boolean).map(d => {
     const code = d.trim().slice(2);
-    return `<a href="https://www.schools.nyc.gov/schools/${esc(code)}" target="_blank" rel="noopener">${esc(d.trim())}</a>`;
+    const nm = schoolName(d.trim());
+    return `<a href="https://www.schools.nyc.gov/schools/${esc(code)}" target="_blank" rel="noopener">${esc(nm || d.trim())}</a>`;
   }).join(', ');
-  return `${links}<span class="meta">${esc(p.label)}</span>`;
+  const anyNamed = dbns.some(d => schoolName(d.trim()));
+  return `${links}<span class="meta">${esc(anyNamed ? dbns.join(', ') : p.label)}</span>`;
 }
 const LANDUSE = {1:'One and two family buildings',2:'Multifamily walk-up',3:'Multifamily with elevator',4:'Mixed residential and commercial',5:'Commercial and office',6:'Industrial and manufacturing',7:'Transportation and utility',8:'Public facilities and institutions',9:'Open space and outdoor recreation',10:'Parking facilities',11:'Vacant land'};
 const LINECOLORS = {'1':'#EE352E','2':'#EE352E','3':'#EE352E','4':'#00933C','5':'#00933C','6':'#00933C','7':'#B933AD','A':'#0039A6','C':'#0039A6','E':'#0039A6','B':'#FF6319','D':'#FF6319','F':'#FF6319','M':'#FF6319','G':'#6CBE45','J':'#996633','Z':'#996633','L':'#A7A9AC','N':'#FCCC0A','Q':'#FCCC0A','R':'#FCCC0A','W':'#FCCC0A','S':'#808183','SIR':'#0078C6'};
@@ -678,7 +688,7 @@ async function inspect(lat, lng, geoFeature=null){
     ['https://findmypollsite.vote.nyc/', 'Find your poll site'],
     ['https://vote.nyc/', 'Register to vote'],
   ]);
-  html += `<div class="note">Officeholders as of June 2026, from the City Council, the unitedstates legislators project and Open States.</div></section>`;
+  html += `<div class="note">Officeholders verified July 2026, from the City Council, the unitedstates legislators project and Open States.</div></section>`;
 
   /* ----- 3 · living here ----- */
   html += `<section class="blk" id="sec-living"><h3><span class="num">3</span> Living here</h3>`;
@@ -695,7 +705,7 @@ async function inspect(lat, lng, geoFeature=null){
   else html += row('Zoned elementary', `<span class="meta" style="display:inline">No zoned school — choice or unzoned area</span>`);
   if (ms?.properties.label) html += row('Zoned middle school', schoolLinks(ms.properties), 'mszones');
   html += nearestSchools(lat,lng) + `
-  <div class="note" style="margin-bottom:4px">Zones are 2024-2025; locations are the Department of Education's latest published point file (2019-20) with 2021-22 enrollment — confirm with MySchools before enrolling. School links go to the DOE page; "profile" links go to InsideSchools.</div>`;
+  <div class="note" style="margin-bottom:4px">Zones are 2024-2025; locations are the Department of Education's latest published point file (2019-20) with 2021-22 enrollment; reading and math proficiency are the 2023 state tests and graduation rates are the class of 2023 — confirm with MySchools before enrolling. School links go to the DOE page; "profile" links go to InsideSchools.</div>`;
   html += `<div class="subhead">Colleges nearby</div>` + collegeHtml(lat,lng);
   html += `<div class="subhead">Health</div>` + hospitalHtml(lat,lng);
   html += `<div class="subhead">Faith</div>` + worshipHtml(lat,lng);
@@ -981,9 +991,18 @@ function snapshotBlock(lat, lng, nta, boro){
   const aw = u18 && ratioWord(u18/CITY.under18_pct, 'more children than the city average', 'fewer children than the city average');
   if (aw) parts.push(aw);
   const clauses = parts.filter(Boolean);
-  const sentence = clauses.length >= 2
-    ? `${esc(nta.properties.ntaname)} is ${clauses[0]}, ${clauses.slice(1).join(', ')} — all of it from the numbers and caveats below.`
-    : '';
+  // "is" only works when the leading clause is an adjective phrase (density, "far from the subway");
+  // if a "with …"/noun clause would lead, switch frames so the sentence stays grammatical
+  const isLead = c => c && !c.startsWith('with ');
+  let sentence = '';
+  if (clauses.length >= 2){
+    if (isLead(clauses[0])){
+      sentence = `${esc(nta.properties.ntaname)} is ${clauses[0]}, ${clauses.slice(1).join(', ')} — all of it from the numbers and caveats below.`;
+    } else {
+      const rest = [clauses[0].replace(/^with /,''), ...clauses.slice(1)];
+      sentence = `${esc(nta.properties.ntaname)} has ${rest.join(', ')} — all of it from the numbers and caveats below.`;
+    }
+  }
 
   return `<div class="snapshot">
     ${sentence ? `<p>${sentence}</p>` : ''}
@@ -1026,6 +1045,7 @@ async function fetchElevation(lat,lng){
 /* ---------- nearest schools (static) ---------- */
 function nearestSchools(lat,lng){
   const near = DATA.schools.map(s => ({dbn:s[0],name:s[1],lat:s[2],lng:s[3],enr:s[4],span:s[5],ela:s[6],math:s[7],grad:s[8],d:haversine(lat,lng,s[2],s[3])}))
+    .filter(s => s.span || s.enr != null) // drop DOE offices, adult learning centers, home instruction — file rows with no grades and no enrollment
     .sort((a,b)=>a.d-b.d).slice(0,5);
   if (!near.length) return '';
   return `<ul class="toplist">` + near.map(s => {
@@ -1073,7 +1093,7 @@ function supermarketHtml(lat,lng){
   return `<ul class="toplist">`+near.map(s =>
     `<li class="poi" data-lat="${s.lat}" data-lng="${s.lng}" data-name="${esc(s.name)}">
       <span>${esc(s.name)}</span><span class="n">${walkmin(s.d)} min</span></li>`).join('')+`</ul>
-    <div class="note" style="margin:0 0 6px">Real supermarkets only: 950 stores from the state's licensed retail-food file, kept when they match a known supermarket operator or carry "supermarket" in their name — the raw file lists every licensed food retailer, breweries and bodegas included, so a name-and-chain filter beats trusting the category. Independents named like delis may be missed.</div>`;
+    <div class="note" style="margin:0 0 6px">Real supermarkets only: 951 stores from the state's licensed retail-food file, kept when they match a known supermarket operator or carry "supermarket" in their name — the raw file lists every licensed food retailer, breweries and bodegas included, so a name-and-chain filter beats trusting the category. Independents named like delis may be missed.</div>`;
 }
 // what is on the plate within a short walk — counts and character from the restaurant-cuisine dataset
 const CUISINE_GENERIC = new Set(['', 'Other', 'Not Listed/Not Applicable']);
@@ -1634,7 +1654,9 @@ function signedPct(v){
 }
 function pctColor(v){ return v>0 ? 'color:#b3382c' : v<0 ? 'color:#1f7a4d' : ''; }
 function compstatEntry(cs, pctNum){
-  const key = pctNum===22 ? 'Central Park Precinct' : `${ordinal(pctNum)} Precinct`;
+  // the scraper feed names precinct 22 "22nd Precinct"; older snapshots used "Central Park Precinct"
+  const keys = pctNum===22 ? ['22nd Precinct', 'Central Park Precinct'] : [`${ordinal(pctNum)} Precinct`];
+  const key = keys.find(k => cs?.[k]) || keys[0];
   return {key, p: cs?.[key]};
 }
 
@@ -1702,7 +1724,7 @@ async function fetchCrime(ctx){
   const lastStart = (+base.start.slice(0,4)-1) + base.start.slice(4);
   const lastEnd = (+base.end.slice(0,4)-1) + base.end.slice(4);
   const sparkStart = new Date(new Date(base.end) - 380*86400000).toISOString().slice(0,10);
-  const [rows, lastYear, sparkOld, sparkNew, cs, crash, cityCrash] = await Promise.all([
+  const [rows, lastYear, sparkOld, sparkNew, cs, crash, cityCrash, crashMax] = await Promise.all([
     soda('5uac-w243', {'$select':'ofns_desc,law_cat_cd,count(*) as n','$where':wNow,'$group':'ofns_desc,law_cat_cd','$order':'n DESC','$limit':80}),
     soda('qgea-i56i', {'$select':'count(*) as n','$where':`${wNow} AND rpt_dt between '${lastStart}T00:00:00' and '${lastEnd}T23:59:59'`}),
     soda('qgea-i56i', {'$select':'date_trunc_ym(rpt_dt) as m,count(*) as n','$where':`${wNow} AND rpt_dt >= '${sparkStart}T00:00:00'`,'$group':'m'}),
@@ -1711,6 +1733,7 @@ async function fetchCrime(ctx){
     soda('h9gi-nx95',{'$select':'count(*) as n, sum(number_of_persons_injured) as inj, sum(number_of_persons_killed) as killed',
       '$where':`within_circle(location, ${lat}, ${lng}, 250) AND crash_date > '${daysAgoISO(365)}'`}).catch(()=>null),
     cityCrashTotal(),
+    feedMax('h9gi-nx95','crash_date'),
   ]);
   if (stale(ctx)||!$('crime')) return;
   const total = rows.reduce((s,x)=>s+ +x.n,0);
@@ -1768,12 +1791,13 @@ async function fetchCrime(ctx){
   if (crash && crash[0]){
     const d = crash[0];
     const crashMult = cityCrash ? (+d.n)/(cityCrash*circleSqMi(250)/CITY_LAND_SQMI) : null;
+    const crashLag = feedLagNote(crashMax);
     h += `<div class="row" style="margin-top:8px"><span class="k">Traffic crashes within 250 meters, last 12 months</span><span class="v bignum">${fmt(d.n)}</span></div>
       <div class="statpair">
         <div class="g"><b>${crashMult!=null?crashMult.toFixed(1)+'×':'—'}</b><span>the citywide average by area</span></div>
         <div class="g"><b>${fmt(d.inj)}</b><span>people injured</span></div>
         <div class="g" style="${+d.killed?'border-color:#b3382c':''}"><b style="${+d.killed?'color:#b3382c':''}">${fmt(d.killed)}</b><span>killed</span></div>
-      </div>`;
+      </div>${crashLag?`<div class="note" style="margin:2px 0 0">${esc(crashLag.trim())}</div>`:''}`;
   }
   h += `<div class="note">${perRes ? PER_RESIDENT_CAVEAT + ' ' : ''}Complaint counts also reflect foot traffic and reporting behavior, and locations of sex crimes and some other offenses are withheld. Context, not a safety score.</div>`;
 
@@ -1844,31 +1868,37 @@ async function fetchChanging(ctx){
   } else $('building').innerHTML = '';
   // newly licensed businesses (bbox ≈ 400 m)
   const dy = 0.0036, dx = 0.0047;
-  soda('w7w3-xahh',{'$select':'business_name,dba_trade_name,business_category,license_creation_date',
-    '$where':`latitude::number between ${lat-dy} and ${lat+dy} AND longitude::number between ${lng-dx} and ${lng+dx} AND license_creation_date > '${daysAgoISO(365)}' AND license_status='Active'`,
-    '$order':'license_creation_date DESC','$limit':6})
-  .then(rows => {
+  Promise.all([
+    soda('w7w3-xahh',{'$select':'business_name,dba_trade_name,business_category,license_creation_date',
+      '$where':`latitude::number between ${lat-dy} and ${lat+dy} AND longitude::number between ${lng-dx} and ${lng+dx} AND license_creation_date > '${daysAgoISO(365)}' AND license_status='Active'`,
+      '$order':'license_creation_date DESC','$limit':6}),
+    feedMax('w7w3-xahh','license_creation_date'),
+  ]).then(([rows, mx]) => {
     if (stale(ctx)||!$('newbiz')) return;
-    if (!rows.length){ $('newbiz').innerHTML = row('Newly licensed businesses nearby','None in the last year<span class="meta">covers trades the city licenses, not every storefront</span>'); return; }
+    const lag = feedLagNote(mx);
+    if (!rows.length){ $('newbiz').innerHTML = row('Newly licensed businesses nearby',`None in the last year<span class="meta">covers trades the city licenses, not every storefront${esc(lag)}</span>`); return; }
     let h = `<div class="row"><span class="k">Newly licensed businesses within ~400 meters, last 12 months</span><span class="v bignum">${rows.length}${rows.length===6?'+':''}</span></div>
       <ul class="toplist">`+rows.map(x=>`<li><span>${esc(titleWords(x.dba_trade_name||x.business_name))}<span class="sub">${esc(x.business_category||'')}</span></span><span class="n">${monthYear(x.license_creation_date)}</span></li>`).join('')+`</ul>
-      <div class="note">Department of Consumer and Worker Protection licenses — covers licensed trades only, not every new storefront.</div>`;
+      <div class="note">Department of Consumer and Worker Protection licenses — covers licensed trades only, not every new storefront.${esc(lag)}</div>`;
     $('newbiz').innerHTML = h;
   }).catch(()=>{ if(!stale(ctx)&&$('newbiz')) $('newbiz').innerHTML='<span class="errnote">License feed unavailable right now.</span>'; });
   // film shoots by ZIP
   if (zip){
-    soda('tg4x-b46p',{'$select':'category,subcategoryname,startdatetime,parkingheld',
-      '$where':`zipcode_s LIKE '%${zip}%' AND startdatetime > '${daysAgoISO(180)}' AND eventtype='Shooting Permit'`,
-      '$order':'startdatetime DESC','$limit':5})
-    .then(rows => {
+    Promise.all([
+      soda('tg4x-b46p',{'$select':'category,subcategoryname,startdatetime,parkingheld',
+        '$where':`zipcode_s LIKE '%${zip}%' AND startdatetime > '${daysAgoISO(180)}' AND eventtype='Shooting Permit'`,
+        '$order':'startdatetime DESC','$limit':5}),
+      feedMax('tg4x-b46p','startdatetime'),
+    ]).then(([rows, mx]) => {
       if (stale(ctx)||!$('film')) return;
-      if (!rows.length){ $('film').innerHTML = row('Film and TV shoots in this ZIP','None permitted in the last six months'); return; }
+      const lag = feedLagNote(mx);
+      if (!rows.length){ $('film').innerHTML = row('Film and TV shoots in this ZIP', lag ? `None in the city's file<span class="meta">${esc(lag.trim())}</span>` : 'None permitted in the last six months'); return; }
       let h = `<div class="row"><span class="k">Film and TV shoots permitted in ZIP ${esc(zip)}, last six months</span><span class="v bignum">${rows.length}${rows.length===5?'+':''}</span></div>
         <ul class="toplist">`+rows.map(x=>{
           const street = (x.parkingheld||'').split(',')[0].toLowerCase().replace(/\s+/g,' ').trim();
           return `<li><span>${esc(x.category||'Production')}${x.subcategoryname && x.subcategoryname!=='Not Applicable'?' · '+esc(x.subcategoryname):''}<span class="sub">${esc(titleWords(street))}</span></span><span class="n">${monthYear(x.startdatetime)}</span></li>`;
         }).join('')+`</ul>
-        <div class="note">Mayor's Office of Media and Entertainment permits; the city updates this dataset irregularly.</div>`;
+        <div class="note">Mayor's Office of Media and Entertainment permits; the city updates this dataset irregularly.${esc(lag)}</div>`;
       $('film').innerHTML = h;
     }).catch(()=>{ if(!stale(ctx)&&$('film')) $('film').innerHTML='<span class="errnote">Film permit feed unavailable right now.</span>'; });
   } else $('film').innerHTML = '';
@@ -1878,6 +1908,18 @@ function monthYear(iso){
   if (!iso) return '';
   const d = new Date(iso);
   return d.toLocaleDateString('en-US',{month:'short', year:'numeric'});
+}
+/* some city feeds quietly stop updating; check each dataset's true max date once per session
+   and say so rather than implying the window runs to today */
+const _feedMax = {};
+function feedMax(ds, col){
+  if (!_feedMax[ds]) _feedMax[ds] = soda(ds, {'$select':`max(${col}) as m`}).then(r=>r?.[0]?.m||null).catch(()=>null);
+  return _feedMax[ds];
+}
+function feedLagNote(iso, maxDays){
+  if (!iso) return '';
+  const age = (Date.now() - new Date(iso).getTime())/86400000;
+  return age > (maxDays||35) ? ` The city's feed currently runs only through ${monthYear(iso)}, so anything more recent is missing here.` : '';
 }
 
 /* ---------- 8 · landmarks and lore ---------- */

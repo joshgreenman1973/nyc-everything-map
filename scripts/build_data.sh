@@ -52,6 +52,9 @@ python3 ../../scripts/extract_officials.py   # writes officials.json
 # extract_officials.py — re-verify them against official sources when refreshing.
 
 # ---------------------------------------------------------------- 3. demographics
+# WARNING: extract_demographics.py produces the OLD ACS 2016-2020 base. The site
+# serves ACS 2020-2024 (built by refresh_acs2024.py, which runs as step 7 below
+# and overwrites these values). Never publish the output of this step alone.
 for f in demo econ soc hous; do
   curl -s -A "Mozilla/5.0" -L \
     "https://www1.nyc.gov/assets/planning/download/office/planning-level/nyc-population/acs/${f}_20162020_acs5yr_nta.xlsx" \
@@ -69,6 +72,10 @@ json.dump(out, open('subway.json','w'), ensure_ascii=False)
 PY
 
 # ------------------------------------------------- 4b. schools, landmarks, environment
+# WARNING: rerunning bake_extras.py elections() would DROP the 2024 presidential
+# fields (x_harris/x_trump/x_total) and the crossed-indicator NTA fields
+# (vcrime_n, evic_n, newbuild_n, pm25) — those merges live only in git history
+# (see the NOTE at the end of bake_extras.py). Re-apply them after any rebake.
 python3 ../../scripts/bake_extras.py
 
 # ---------------------------------------------------------------- 5. publish
@@ -76,6 +83,14 @@ cd ../..
 cp data/out/*.json docs/data/
 cp data/raw/officials.json data/raw/nta_demographics.json data/raw/compare_geos.json data/raw/subway.json docs/data/
 
-# ---------------------------------------------------------------- 6. validate
+# ------------------------------------------- 6. upgrade demographics to ACS 2020-2024
+# Overwrites the 2016-2020 values from step 3 in place (tract-aggregated counts,
+# pooled-bracket medians incl. median age, published medians for city/boroughs).
+python3 scripts/refresh_acs2024.py
+
+# ------------------------------------------------------- 7. asking rents (StreetEasy)
+python3 scripts/refresh_askingrents.py
+
+# ---------------------------------------------------------------- 8. validate
 python3 scripts/validate_lookups.py
 echo "Done. Review validation output above before deploying."

@@ -28,6 +28,10 @@ BORO = {'005': 'Bronx', '047': 'Brooklyn', '061': 'Manhattan', '081': 'Queens', 
 # age (B01001): under-18 = male 003-006 + female 027-030; 65+ = male 020-025 + female 044-049
 AGE_U18 = [f'B01001_{i:03d}E' for i in (3, 4, 5, 6, 27, 28, 29, 30)]
 AGE_65 = [f'B01001_{i:03d}E' for i in (20, 21, 22, 23, 24, 25, 44, 45, 46, 47, 48, 49)]
+# full age distribution for median-age interpolation (same pooled-bracket method as income/rent)
+AGE_M = [f'B01001_{i:03d}E' for i in range(3, 26)]
+AGE_F = [f'B01001_{i:03d}E' for i in range(27, 50)]
+AGE_BOUNDS = [5, 10, 15, 18, 20, 21, 22, 25, 30, 35, 40, 45, 50, 55, 60, 62, 65, 67, 70, 75, 80, 85, None]
 COUNTS = {
     'pop': ['B01001_001E'],
     'u18': AGE_U18, 's65': AGE_65,
@@ -44,6 +48,7 @@ COUNTS = {
     'agg_inc': ['B19313_001E'],
     'commute_min': ['B08013_001E'], 'commuters': ['B08303_001E'],
     'lep_tot': ['B06007_001E'], 'lep': ['B06007_005E', 'B06007_008E'],
+    'workers': ['B08006_001E'], 'wfh': ['B08006_017E'],
 }
 # median-by-interpolation brackets: (table prefix, count, upper bounds)
 INC_BOUNDS = [10000, 15000, 20000, 25000, 30000, 35000, 40000, 45000, 50000,
@@ -57,7 +62,8 @@ VAL_BOUNDS = [10000, 15000, 20000, 25000, 30000, 35000, 40000, 50000, 60000, 700
               400000, 500000, 750000, 1000000, 1500000, 2000000, None]
 VAL_VARS = [f'B25075_{i:03d}E' for i in range(2, 28)]
 
-ALL_VARS = sorted({v for vs in COUNTS.values() for v in vs} | set(INC_VARS) | set(RENT_VARS) | set(VAL_VARS))
+ALL_VARS = sorted({v for vs in COUNTS.values() for v in vs} | set(INC_VARS) | set(RENT_VARS) | set(VAL_VARS)
+                  | set(AGE_M) | set(AGE_F))
 
 def fetch(vars_, geo):
     out = {}
@@ -76,16 +82,16 @@ def fetch(vars_, geo):
                 d[v] = float(x) if x not in (None, '', 'null') and float(x) > -1e8 else 0.0
     return out
 
-def pooled_median(counts, bounds):
+def pooled_median(counts, bounds, decimals=0):
     total = sum(counts)
     if total < 50:
         return None
     half, c, lo = total / 2.0, 0.0, 0.0
     for n, hi in zip(counts, bounds):
         if c + n >= half:
-            width = (hi - lo) if hi else lo  # open top bracket: extend by lower bound
-            hi2 = hi if hi else lo * 2
-            return round(lo + (half - c) / n * (hi2 - lo)) if n else round(lo)
+            hi2 = hi if hi else lo * 2  # open top bracket: extend by lower bound
+            val = (lo + (half - c) / n * (hi2 - lo)) if n else lo
+            return round(val, decimals) if decimals else round(val)
         c += n
         lo = hi
     return None
@@ -120,6 +126,9 @@ def derive(d):
     out['median_hh_income'] = pooled_median([d.get(v, 0) for v in INC_VARS], INC_BOUNDS)
     out['median_rent'] = pooled_median([d.get(v, 0) for v in RENT_VARS], RENT_BOUNDS)
     out['median_home_value'] = pooled_median([d.get(v, 0) for v in VAL_VARS], VAL_BOUNDS)
+    out['median_age'] = pooled_median([d.get(m, 0) + d.get(f, 0) for m, f in zip(AGE_M, AGE_F)],
+                                      AGE_BOUNDS, decimals=1)
+    out['wfh_pct'] = pct(g('wfh'), g('workers'))
     return out
 
 def main():
@@ -176,11 +185,20 @@ def main():
     print(updated, 'NTAs refreshed to ACS 2020-2024')
 
     # citywide + borough comparison values, same vintage
+    # medians: at place/county level the bureau PUBLISHES true medians — use those, not
+    # bracket interpolation (interpolation is only for NTAs, where nothing is published)
+    PUB_MEDIANS = {'median_hh_income': 'B19013_001E', 'median_rent': 'B25064_001E',
+                   'median_home_value': 'B25077_001E', 'median_age': 'B01002_001E'}
     cg = {}
     for label, geo in [('NYC', 'for=place:51000&in=state:36')] + \
                       [(BORO[c], f'for=county:{c}&in=state:36') for c in COUNTIES]:
         d = list(fetch(ALL_VARS, geo).values())[0]
         cg[label] = derive(d)
+        pub = list(fetch(list(PUB_MEDIANS.values()), geo).values())[0]
+        for k, v in PUB_MEDIANS.items():
+            x = pub.get(v)
+            if x and x > 0:
+                cg[label][k] = round(x, 1) if k == 'median_age' else round(x)
     old = json.load(open('docs/data/compare_geos.json'))
     for label, fresh in cg.items():
         merged = old.get(label, {})
