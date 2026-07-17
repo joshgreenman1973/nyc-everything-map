@@ -29,6 +29,11 @@ def git(*args, check=True):
 
 
 def notify(body):
+    # No AppleScript/iMessage on GitHub Actions runners — skip cleanly there.
+    # (In CI, failures surface via the job status, which emails Josh.)
+    if os.environ.get("GITHUB_ACTIONS"):
+        print(f"[notify skipped in CI] {body}")
+        return
     body = body.replace('"', "'").replace(chr(92), "")
     script = ('tell application "Messages"\n'
               'set s to 1st account whose service type = iMessage\n'

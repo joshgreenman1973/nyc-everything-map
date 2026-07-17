@@ -1,0 +1,38 @@
+name: Restaurant data refresh
+
+# Monthly refresh of the Everything Map's "Eating nearby" restaurant data
+# (DOHMH inspections). Rebuilds docs/data/restaurants.json and pushes to main
+# only if the data changed. Runs remotely on GitHub, so it no longer depends on
+# Josh's laptop being open. iMessage notification is skipped in CI; a failed run
+# emails Josh via GitHub instead.
+#
+# Optional repo secret: SOCRATA_APP_TOKEN (keyless works too; a 403 is throttling).
+
+on:
+  schedule:
+    - cron: '30 11 1 * *'    # 1st of the month, ~06:30 ET
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install requests openpyxl shapely
+      - name: Configure git identity
+        run: |
+          git config user.name "Josh Greenman"
+          git config user.email "josh.greenman@gmail.com"
+      - name: Refresh restaurant data
+        env:
+          SOCRATA_APP_TOKEN: ${{ secrets.SOCRATA_APP_TOKEN }}
+        run: python3 scripts/refresh_restaurants.py
