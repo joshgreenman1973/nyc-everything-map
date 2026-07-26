@@ -85,6 +85,10 @@ body{font-family:'Archivo',sans-serif; color:var(--ink); background:var(--paper)
 .phead h2{font-family:'Fraunces',serif; font-weight:900; font-size:25px; line-height:1.08; margin:8px 0 4px; letter-spacing:-.01em}
 .phead .sub{color:#c6cde0; font-size:13px; line-height:1.45}
 .phead .nearnote{color:#9aa3c0; font-size:11.5px; margin-top:6px; font-style:italic}
+.phead .cphere{margin:6px 0 8px; padding:7px 11px; border-left:3px solid var(--gold);
+  background:rgba(255,255,255,.07); border-radius:0 6px 6px 0; font-size:13px; color:#e8ecf6; line-height:1.4}
+.phead .cphere b{color:#fff; font-weight:700}
+.phead .cphere span{display:block; color:#9aa3c0; font-size:11px; margin-top:2px}
 .phead .actions{margin-top:12px; display:flex; gap:8px; flex-wrap:wrap}
 .phead .actions button,.phead .actions a{font:600 11px 'Archivo'; padding:5px 12px; border-radius:999px; cursor:pointer;
   border:1.5px solid rgba(255,255,255,.35); background:transparent; color:#dfe4f2; text-decoration:none}
@@ -344,7 +348,7 @@ fetch('data/cityoutline.json').then(r=>r.json()).then(gj => {
 const $ = id => document.getElementById(id);
 const LAYERS = {}, DATA = {};
 const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections','tracts','hoods_alt','hoods_whong'];
-const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','worship','colleges','artsvenues','publicart','play','parks','libraries','supermarkets','askingrents','transit45','tract_context','restaurants'];
+const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','worship','colleges','artsvenues','publicart','play','parks','libraries','supermarkets','askingrents','transit45','tract_context','restaurants','commonplace'];
 let loaded = 0, totalFiles = LAYER_FILES.length + DATA_FILES.length;
 function tick(){
   loaded++;
@@ -596,9 +600,18 @@ async function inspect(lat, lng, geoFeature=null){
   /* ----- header ----- */
   const addrLine = props.name ? esc(props.name) : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
   const subBits = [boro, zip ? 'ZIP ' + esc(zip) : null].filter(Boolean).join(' · ');
+  // Suppress the gazetteer line when the geocoder already titled the report
+  // with the same place ("NY Stock Exchange" over "NY Stock Exchange").
+  let here = placeHere(lat, lng);
+  if (here && props.name){
+    const norm = s => s.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+    const a = norm(props.name), b = norm(here.name);
+    if (a === b || a.includes(b) || b.includes(a)) here = null;
+  }
   let html = `<div class="phead">
     <div class="kicker">Point report</div>
     <h2>${addrLine}</h2>
+    ${here ? `<div class="cphere">The city knows this spot as <b>${esc(here.name)}</b><span>${esc(here.type.toLowerCase())} · named by ${esc(cpAgency(here.src))}</span></div>` : ''}
     <div class="sub">${nta ? `<b style="color:#fff">${esc(nta.properties.ntaname)}</b> · ` : ''}${subBits}<span id="elev"></span></div>
     ${geoOsm ? `<div class="nearnote">City geocoder is down — address from OpenStreetMap; tax-lot details unavailable until it is back.</div>` : ''}
     ${revDist!=null && revDist>40 ? `<div class="nearnote">Nearest address point, ${Math.round(revDist)} meters from where you clicked</div>` : ''}
@@ -640,6 +653,7 @@ async function inspect(lat, lng, geoFeature=null){
       : `<span class="badge nozone">Not in an evacuation zone</span>`, inZone ? 'hurricane' : null);
   if (aq) html += row('Air quality (2023)', `PM2.5 ${aq.pm25} µg/m³ · NO₂ ${aq.no2} ppb<span class="meta">citywide ${DATA.airquality.city.pm25} and ${DATA.airquality.city.no2} · community district annual averages</span>`);
   if (hvi) html += row('Heat vulnerability', `${hvi} of 5<span class="meta">Health department index for ZIP ${esc(zip)}; 5 = most at risk in heat waves</span>`);
+  html += commonPlaceHtml(lat, lng);
   html += `<div id="trees"></div><div id="flood"></div>`;
   html += morelinks([
     nta && [`https://popfactfinder.planning.nyc.gov/explorer?geotype=NTA2020&geoids=${esc(nta.properties.nta2020)}`, 'Full census profile'],
@@ -1056,6 +1070,46 @@ function nearestSchools(lat,lng){
         ${q?`<span class="sub">${q}</span>`:''}</span>
       <span class="n">${walkmin(s.d)} min</span></li>`;
   }).join('') + `</ul>`;
+}
+/* CommonPlace — the city's own gazetteer. Sorted nearest-first; `pts` rows are
+   [lat, lng, name, typeIndex, source, bin]. */
+function commonPlaces(lat, lng, radius, limit){
+  const D = DATA.commonplace; if (!D) return [];
+  // Cheap bounding box before the trig — 19k points is enough that measuring
+  // every one of them on every click showed up as garbage on a phone.
+  const dLat = radius/111320, dLng = radius/(111320*Math.cos(lat*Math.PI/180));
+  const hits = [];
+  for (const p of D.pts){
+    if (Math.abs(p[0]-lat) > dLat || Math.abs(p[1]-lng) > dLng) continue;
+    const d = haversine(lat,lng,p[0],p[1]);
+    if (d < radius) hits.push({name:p[2], lat:p[0], lng:p[1], type:D.types[p[3]], src:p[4], bin:p[5], d});
+  }
+  return hits.sort((a,b)=>a.d-b.d).slice(0, limit||6);
+}
+/* The one place the click is essentially standing on, if there is one. */
+function placeHere(lat, lng){
+  const n = commonPlaces(lat, lng, 55, 1);
+  return n.length ? n[0] : null;
+}
+const CP_AGENCY = {
+  DoITT:'the technology office', OTHER:'the city gazetteer', DCP:'the planning department',
+  DOE:'the education department', NYPD:'the police department', FDNY:'the fire department',
+  EMS:'the fire department (EMS)', DPR:'the parks department', NYCHA:'the housing authority',
+  NOAA:'federal chart data (NOAA)', OEM:'emergency management',
+};
+const cpAgency = s => CP_AGENCY[s] || s;
+function commonPlaceHtml(lat,lng){
+  const near = commonPlaces(lat, lng, 500, 6);
+  const D = DATA.commonplace;
+  let h = `<div class="subhead">What the city calls this block</div>`;
+  if (!near.length){
+    return h + `<div class="note" style="margin:0 0 6px">No named city place within about a five minute walk. The gazetteer names roughly 19,000 spots citywide, so plenty of ordinary blocks have none.</div>`;
+  }
+  h += `<ul class="toplist">` + near.map(p => `<li class="poi" data-lat="${p.lat}" data-lng="${p.lng}" data-name="${esc(p.name)}">
+    <span>${esc(p.name)}<span class="sub">${esc(p.type.toLowerCase())}${p.bin?' · building '+p.bin:''}</span></span>
+    <span class="n">${p.d<60?'here':walkmin(p.d)+' min'}</span></li>`).join('') + `</ul>`;
+  h += `<div class="note" style="margin:0 0 4px">From CommonPlace, the gazetteer behind the city's geocoder — the file that lets a city system turn a name like "PS 61" into a building and a coordinate. Its stated purpose is to aid dispatch, so it covers what agencies get called out to rather than what is notable: a Home Depot and a park comfort station are both in it, and most storefronts are not. Categories are the city's own. NYPD-sourced entries other than public-safety sites are withheld here because the agency's data dictionary bars redistributing them. Source last updated ${esc(D.modified||'—')}.</div>`;
+  return h;
 }
 function hospitalHtml(lat,lng){
   const all = DATA.hospitals.map(h => ({name:h[0], lat:h[1], lng:h[2], er:h[3], note:h[4], d:haversine(lat,lng,h[1],h[2])}))
