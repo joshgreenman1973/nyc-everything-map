@@ -105,7 +105,7 @@ section.blk:last-of-type{border-bottom:0}
 .row.hl{cursor:pointer; transition:background .12s}
 .row.hl:hover{background:#f3e9c8}
 .row.hl:hover .k::after{content:" ⬡"; color:var(--gold-deep)}
-.row a, ul.toplist a{color:inherit; text-decoration:underline; text-decoration-color:var(--gold-deep); text-underline-offset:2px}
+.row a, ul.toplist a, .cmp .lab a{color:inherit; text-decoration:underline; text-decoration-color:var(--gold-deep); text-underline-offset:2px}
 .bignum{font-family:'Fraunces',serif; font-weight:900; font-size:26px; line-height:1}
 .badge{display:inline-block; font:700 11px 'Archivo'; padding:3px 10px; border-radius:999px; border:1.5px solid currentColor}
 .badge.zone1,.badge.zone2{color:var(--red)} .badge.zone3,.badge.zone4{color:#b06a00} .badge.zone5,.badge.zone6{color:var(--green)}
@@ -348,14 +348,14 @@ fetch('data/cityoutline.json').then(r=>r.json()).then(gj => {
 const $ = id => document.getElementById(id);
 const LAYERS = {}, DATA = {};
 const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections','tracts','hoods_alt','hoods_whong'];
-const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','worship','colleges','artsvenues','publicart','play','parks','libraries','supermarkets','askingrents','transit45','tract_context','restaurants','commonplace'];
+const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','worship','colleges','artsvenues','publicart','play','parks','libraries','supermarkets','askingrents','transit45','tract_context','restaurants','commonplace','rankings'];
 let loaded = 0, totalFiles = LAYER_FILES.length + DATA_FILES.length;
 function tick(){
   loaded++;
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '25'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '26'; // bump when files in data/ change, so cached copies refresh
 const ready = Promise.all([
   ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
   ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
@@ -2079,7 +2079,105 @@ function demographicsBlock(nta, boro){
   if (tc && tc.inc){
     h += `<div class="row" style="margin-top:8px"><span class="k">This census tract specifically</span><span class="v">${money(tc.inc)}${tc.moe?` ±${money(tc.moe)}`:''}<span class="meta">median income, tract of ~${fmt(tc.pop)} people${tc.rs?` · ${fmt(tc.rs)} rent-stabilized units`:''}. Tract survey numbers are noisy — the margin shows why the neighborhood figures above are the reliable read.</span></span></div>`;
   }
-  h += `<div class="note">American Community Survey 2020-2024 five year estimates, aggregated from census tracts to neighborhood tabulation area ${esc(code)} (medians re-interpolated from pooled bracket distributions, not averaged); rent-stabilized counts are administrative, via JustFix from tax filings. Survey numbers carry real margins of error; treat differences of a few points as noise.</div></section>`;
+  h += `<div class="note">American Community Survey 2020-2024 five year estimates, aggregated from census tracts to neighborhood tabulation area ${esc(code)} (medians re-interpolated from pooled bracket distributions, not averaged); rent-stabilized counts are administrative, via JustFix from tax filings. Survey numbers carry real margins of error; treat differences of a few points as noise.</div>`;
+  h += ranksBlock(nta);
+  h += `</section>`;
+  return h;
+}
+
+/* ---------- where this neighborhood places, from the companion rankings project ----------
+   Ranks only — position among neighborhoods, never a blended score. Values are
+   shown only for measures the table above does not already carry, so no figure
+   appears twice in two forms. */
+const RANK_HEADLINE = ['median_hh_income','median_rent','density','mean_commute','restaurant_rate','tree_density','noise_rate'];
+// measures the numbers table above already prints — show their rank, not the value again
+const RANK_SHOWN_ABOVE = new Set(['population','density','median_age','avg_hh_size','median_hh_income',
+  'median_rent','pct_under18','pct_65plus','pct_foreign_born','pct_poverty','pct_bachelors',
+  'pct_limited_english','pct_renters','pct_rent_burdened','unemployment','pct_wfh','mean_commute',
+  'pct_hispanic','pct_white_nh','pct_black_nh','pct_asian_nh']);
+let _rankTies = {};
+function rankShare(R, col, r){
+  const key = col + ':' + r;
+  if (_rankTies[key] == null){
+    let c = 0;
+    for (const k in R.ranks) if (R.ranks[k][col] === r) c++;
+    _rankTies[key] = c;
+  }
+  return _rankTies[key];
+}
+function rankValue(R, id, v){
+  if (v == null) return '';
+  const f = R._fmt[id];
+  let s;
+  if (f === 'usd') s = '$' + Math.round(v).toLocaleString('en-US');
+  else if (f === 'pct') s = (Math.round(v*10)/10).toLocaleString('en-US') + '%';
+  else if (f === 'int') s = Math.round(v).toLocaleString('en-US');
+  else if (f === 'min') s = (Math.round(v*10)/10) + ' min';
+  else if (f === 'mi2') s = v.toLocaleString('en-US') + ' sq mi';
+  else s = (Math.round(v*10)/10).toLocaleString('en-US');
+  if (R.topcode[id] && v >= R.topcode[id]) s += '+';   // census medians cap; the plus says so
+  return s;
+}
+function ranksBlock(nta){
+  const R = DATA.rankings;
+  if (!R || !nta) return '';
+  const code = nta.properties.nta2020;
+  const my = R.ranks[code];
+  if (!my) return '';   // parks, airports and other non-residential areas are not ranked
+  if (!R._col){
+    R._col = {}; R._fmt = {};
+    R.metrics.forEach((m,i) => { R._col[m[0]] = i; R._fmt[m[0]] = m[3]; });
+  }
+  const link = (id, label) => `<a href="${R.site}#m=${encodeURIComponent(id)}" target="_blank" rel="noopener">${esc(label)}</a>`;
+  // standouts: the top and bottom finishes, skipping ranks a crowd of neighborhoods share
+  const cand = [];
+  R.metrics.forEach((m,i) => {
+    const r = my[i], n = R.n[i];
+    if (r == null || !n) return;
+    const low = n - r + 1;
+    const kind = r <= 5 ? 'highest' : low <= 5 ? 'lowest' : null;
+    if (!kind) return;
+    const pos = kind === 'highest' ? r : low;
+    if (rankShare(R, i, r) > 2) return;
+    cand.push({i, id:m[0], label:m[1], src:m[4], r, n, kind, pos});
+  });
+  cand.sort((a,b) => a.pos - b.pos || a.i - b.i);
+  const stand = cand.slice(0,4);
+  const used = new Set(stand.map(s => s.id));
+  // a shared rank is said out loud — several neighborhoods sit at the census median caps
+  const place = s => {
+    const tied = rankShare(R, s.i, s.r) > 1;
+    return s.pos === 1
+      ? `${tied ? 'tied for ' : ''}${s.kind} of ${s.n}`
+      : `${tied ? 'tied ' : ''}${ordinal(s.pos)} ${s.kind} of ${s.n}`;
+  };
+  let h = `<div class="subhead" style="margin-top:18px">Where it places among the city's ${fmt(R.areas)} neighborhoods</div>`;
+  if (stand.length){
+    h += `<ul class="toplist">` + stand.map(s => {
+      const val = RANK_SHOWN_ABOVE.has(s.id) ? '' : rankValue(R, s.id, R.values[code][s.i]);
+      return `<li><span>${link(s.id, s.label)}<span class="sub">${esc(s.src)}${val?' · '+esc(val):''}</span></span>
+        <span class="n">${esc(place(s))}</span></li>`;
+    }).join('') + `</ul>`;
+  }
+  const strip = RANK_HEADLINE.filter(id => !used.has(id) && R._col[id] != null && my[R._col[id]] != null).slice(0,5);
+  if (strip.length){
+    h += `<div class="legendline" style="margin:10px 0 6px"><span><span class="mk"></span>this neighborhood</span><span>1st = highest value</span><span>${fmt(R.areas)}th = lowest</span></div>`;
+    h += strip.map(id => {
+      const i = R._col[id], r = my[i], n = R.n[i], m = R.metrics[i];
+      const raw = R.values[code][i];
+      // a neighborhood sitting at the census cap ties with every other one there — say why
+      const capped = R.topcode[id] && raw >= R.topcode[id]
+        ? `at the $${R.topcode[id].toLocaleString('en-US')} census cap` : '';
+      const val = capped || (RANK_SHOWN_ABOVE.has(id) ? '' : rankValue(R, id, raw));
+      const left = n > 1 ? (r-1)/(n-1)*100 : 0;
+      const tied = rankShare(R, i, r) > 1 ? 'tied ' : '';
+      return `<div class="cmp"><div class="lab"><span>${link(id, m[1])}${val?` <span style="color:#8a8f9e">· ${esc(val)}</span>`:''}</span><b>${tied}${ordinal(r)} of ${n}</b></div>
+        <div class="track"><div class="citymark" style="left:${left.toFixed(1)}%" title="${ordinal(r)} of ${n}"></div></div></div>`;
+    }).join('');
+  }
+  if (!stand.length && !strip.length) return '';
+  h += `<div class="morelinks" style="margin-top:8px"><a href="${R.site}#hood=${encodeURIComponent(code)}" target="_blank" rel="noopener">All ${R.metrics.length} categories for ${esc(nta.properties.ntaname)} →</a></div>`;
+  h += `<div class="note">Ranks come from "Every neighborhood, ranked," a companion project that sorts the ${fmt(R.areas)} residential neighborhood tabulation areas by ${R.metrics.length} measures. Rank 1 is the highest value, not the best one — first in felony complaints means the most of them. Rates per 1,000 residents run high in business districts, where the weekday crowd is not counted as residents. Neighborhoods with identical values share a rank. Census medians stop at $200,000 for income, $3,500 for rent and $2 million for home value, marked with a plus.</div>`;
   return h;
 }
 let _demoLat = 0, _demoLng = 0;
