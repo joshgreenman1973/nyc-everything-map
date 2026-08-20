@@ -355,7 +355,7 @@ function tick(){
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '26'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '27'; // bump when files in data/ change, so cached copies refresh
 const ready = Promise.all([
   ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
   ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
@@ -1101,14 +1101,14 @@ const cpAgency = s => CP_AGENCY[s] || s;
 function commonPlaceHtml(lat,lng){
   const near = commonPlaces(lat, lng, 500, 6);
   const D = DATA.commonplace;
-  let h = `<div class="subhead">What the city calls this block</div>`;
+  let h = `<div class="subhead">What the city has named nearby</div>`;
   if (!near.length){
     return h + `<div class="note" style="margin:0 0 6px">No named city place within about a five minute walk. The gazetteer names roughly 19,000 spots citywide, so plenty of ordinary blocks have none.</div>`;
   }
   h += `<ul class="toplist">` + near.map(p => `<li class="poi" data-lat="${p.lat}" data-lng="${p.lng}" data-name="${esc(p.name)}">
     <span>${esc(p.name)}<span class="sub">${esc(p.type.toLowerCase())}${p.bin?' · building '+p.bin:''}</span></span>
     <span class="n">${p.d<60?'here':walkmin(p.d)+' min'}</span></li>`).join('') + `</ul>`;
-  h += `<div class="note" style="margin:0 0 4px">From CommonPlace, the gazetteer behind the city's geocoder — the file that lets a city system turn a name like "PS 61" into a building and a coordinate. Its stated purpose is to aid dispatch, so it covers what agencies get called out to rather than what is notable: a Home Depot and a park comfort station are both in it, and most storefronts are not. Categories are the city's own. NYPD-sourced entries other than public-safety sites are withheld here because the agency's data dictionary bars redistributing them. Source last updated ${esc(D.modified||'—')}.</div>`;
+  h += `<div class="note" style="margin:0 0 4px">From CommonPlace, the gazetteer behind the city's geocoder — the file that lets a city system turn a name like "PS 61" into a building and a coordinate. Its stated purpose is to aid dispatch, so it covers what agencies get called out to rather than what is notable: a Home Depot and a park comfort station are both in it, and most storefronts are not. Categories are the city's own. NYPD-sourced entries other than public-safety sites are withheld here because the agency's data dictionary bars redistributing them. It is also not a record of what is open: entries carry no status field and are rarely retired, so a school, day care or store that has since closed can stay on this list for years. Source last updated ${esc(D.modified||'—')}.</div>`;
   return h;
 }
 function hospitalHtml(lat,lng){
@@ -1155,7 +1155,7 @@ function cuisineHtml(lat,lng){
   const near = [];
   for (const p of R.pts){
     const d = haversine(lat,lng,p[0],p[1]);
-    if (d <= RAD) near.push({lat:p[0], lng:p[1], ci:p[2], name:p[3], grade:p[4], d});
+    if (d <= RAD) near.push({lat:p[0], lng:p[1], ci:p[2], name:p[3], grade:p[4], insp:p[5]||'', d});
   }
   if (!near.length) return `<div class="note" style="margin:0 0 6px">No restaurants from the city's inspection file within about a 10 minute walk of this point.</div>`;
   const label = ci => R.cuisines[ci] || 'Unlabeled';
@@ -1185,15 +1185,23 @@ function cuisineHtml(lat,lng){
   // a few nearest named spots (skip the generic-label ones so the list reads as cuisine)
   const picks = near.slice().sort((a,b)=>a.d-b.d)
     .filter(p => !CUISINE_GENERIC.has(R.cuisines[p.ci])).slice(0,5);
+  // The city's file has no closure flag, so an entry can outlive the restaurant.
+  // Print the last inspection date once it is more than a year old rather than
+  // letting the listing imply the door is still open.
+  const inspNote = insp => {
+    if (!insp) return ' · permitted, not yet inspected';
+    const age = (Date.now() - new Date(insp + '-15T12:00:00').getTime())/86400000;
+    return age > 365 ? ` · last inspected ${monthYear(insp + '-15T12:00:00')}` : '';
+  };
   const li = p => `<li class="poi" data-lat="${p.lat}" data-lng="${p.lng}" data-name="${esc(p.name)}">
-    <span>${esc(p.name)}<span class="sub">${esc(label(p.ci))}${p.grade?` · grade ${esc(p.grade)}`:''}</span></span>
+    <span>${esc(p.name)}<span class="sub">${esc(label(p.ci))}${p.grade?` · grade ${esc(p.grade)}`:''}${inspNote(p.insp)}</span></span>
     <span class="n">${walkmin(p.d)} min</span></li>`;
 
   return `<div class="row"><span class="k">Restaurants within a 10 minute walk</span><span class="v bignum">${fmt(total)}</span></div>
     ${bars ? `<div class="cbars">${bars}</div>` : ''}
     ${standLine}
     ${picks.length ? `<ul class="toplist">${picks.map(li).join('')}</ul>` : ''}
-    <div class="note" style="margin:0 0 6px">Every establishment in the city's restaurant-inspection file (${fmt(R.cityTotal)} citywide), counted once. "Cuisine" is a single coarse label the owner self-reports from a fixed city list, so it flattens regional cooking ("Chinese" covers every region; "Spanish" here means Spanish-Caribbean/Latino food) and roughly a tenth are blank or "Other" — the breakdown leaves those out. "Stands out for" compares this spot's cuisine mix to the citywide mix.</div>`;
+    <div class="note" style="margin:0 0 6px">Every establishment in the city's restaurant-inspection file (${fmt(R.cityTotal)} citywide), counted once. "Cuisine" is a single coarse label the owner self-reports from a fixed city list, so it flattens regional cooking ("Chinese" covers every region; "Spanish" here means Spanish-Caribbean/Latino food) and roughly a tenth are blank or "Other" — the breakdown leaves those out. "Stands out for" compares this spot's cuisine mix to the citywide mix. The file carries no closure flag and a permit runs two years, so a restaurant that has closed can linger in it: places with no inspection in the past two years are dropped here, and the last inspection date is printed for anything not inspected within the past year.</div>`;
 }
 
 /* flood: live point-in-polygon checks on two city layers */

@@ -14,14 +14,23 @@ Output schema (compact, point-based so the map filters by walking radius):
     "cuisines": ["American", "Chinese", ...],   # index lookup
     "city":     [4656, 2276, ...],              # citywide count per cuisine index
     "cityTotal": 30425,
-    "pts": [[lat, lng, ci, name, grade], ...],   # one row per restaurant
+    "pts": [[lat, lng, ci, name, grade, insp], ...],  # insp = "YYYY-MM" of the
+                                                 # last inspection, "" if never
+    "dropped_stale": 939,                        # not inspected in 2+ years
     "built": "2026-06-22"                         # UTC date the pull ran
   }
+
+The city's file lists establishments with an active permit, but a permit runs
+two years and is not surrendered when a place quietly closes, so a closed
+restaurant can sit in the file long after the door is locked. There is no
+closure flag. The last inspection date is the only usable freshness signal:
+rows more than two years stale are dropped here, and the map prints the date
+for anything not inspected in the past year rather than implying it is open.
 
 Run:  python3 scripts/build_restaurants.py
 """
 import json, os, re, sys, time, urllib.parse, urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.normpath(os.path.join(HERE, "..", "docs", "data", "restaurants.json"))
@@ -29,6 +38,7 @@ OUT = os.path.normpath(os.path.join(HERE, "..", "docs", "data", "restaurants.jso
 BASE = "https://data.cityofnewyork.us/resource/43nn-pn8j.json"
 PAGE = 50000
 NYC = (40.40, 41.00, -74.30, -73.60)  # lat_min, lat_max, lng_min, lng_max
+STALE_DAYS = 730  # last inspection older than this -> treat as closed and drop
 UA = "nyc-everything-map/eating-nearby (github.com/joshgreenman1973)"
 
 
@@ -101,6 +111,18 @@ def build():
     if len(est) < 20000:  # sanity floor — the city has ~30k; refuse to ship a short pull
         raise RuntimeError(f"only {len(est)} establishments fetched — refusing to write")
 
+    # 1b) Drop the long-stale. Health inspects a working restaurant about once a
+    #     year; two years without one, with the permit still nominally active,
+    #     almost always means the place is gone. Rows dated 1900-01-01 are the
+    #     city's marker for "permitted, not yet inspected" — those are new, not
+    #     dead, so they stay.
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=STALE_DAYS)).strftime("%Y-%m-%d")
+    stale = [cm for cm, e in est.items()
+             if e["last"][:10] > "1901-01-01" and e["last"][:10] < cutoff]
+    for cm in stale:
+        del est[cm]
+    print(f"  dropped {len(stale)} establishments with no inspection since {cutoff}")
+
     # 2) Latest A/B/C letter grade per CAMIS (best-effort; grades are also shown
     #    live elsewhere in the map, so a miss here is cosmetic).
     grade = {}
@@ -127,13 +149,15 @@ def build():
         e = est[cm]
         ci = ci_idx[e["cuisine"]]
         city[ci] += 1
-        pts.append([e["lat"], e["lng"], ci, e["name"], grade.get(cm, "")])
+        insp = e["last"][:7] if e["last"][:10] > "1901-01-01" else ""
+        pts.append([e["lat"], e["lng"], ci, e["name"], grade.get(cm, ""), insp])
 
     return {
         "cuisines": cuisines,
         "city": city,
         "cityTotal": len(pts),
         "pts": pts,
+        "dropped_stale": len(stale),
         "built": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
     }
 
