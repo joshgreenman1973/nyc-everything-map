@@ -20,6 +20,9 @@ html,body{height:100%}
 body{font-family:'Archivo',sans-serif; color:var(--ink); background:var(--paper); overflow:hidden}
 #map{position:absolute; inset:0; background:#e8e4d8}
 .leaflet-container{font:inherit}
+/* Pale the basemap down to the house gray. Only tiles live in this pane, so the
+   district outlines and markers drawn on top keep their real colors. */
+.leaflet-tile-pane{filter:grayscale(1) brightness(1.22) contrast(.72) opacity(.9)}
 
 /* ---------- landing hero ---------- */
 #hero{position:absolute; z-index:1000; left:50%; top:12%; transform:translateX(-50%);
@@ -329,8 +332,11 @@ const NYC_BOUNDS = [[40.49,-74.27],[40.92,-73.68]];
 const map = L.map('map', {zoomControl:false, attributionControl:true, zoomSnap:0.25});
 map.fitBounds(NYC_BOUNDS, {padding:[6,6]});
 L.control.zoom({position:'bottomright'}).addTo(map);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+// Basemap. CARTO started watermarking keyless tiles ("API KEY REQUIRED") in September 2026,
+// so this draws OpenStreetMap's own tiles and desaturates them in CSS to keep the pale base
+// the rest of the page is designed against. See .leaflet-tile-pane in the stylesheet.
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   maxZoom:19}).addTo(map);
 // dim everything outside the five boroughs
 fetch('data/cityoutline.json').then(r=>r.json()).then(gj => {
