@@ -1843,7 +1843,7 @@ async function fetchCrime(ctx){
   h += `<div class="row"><span class="k">Crime complaints of every kind within 500 meters, ${fmtWindow(base.start, base.end)}</span><span class="v bignum">${fmt(total)}</span></div>
     <div class="statpair">
       <div class="g"><b>${mult!=null ? mult.toFixed(1)+'×' : '—'}</b><span>the citywide average by area (${pc(expected)})</span></div>
-      <div class="g"><b>${perRes ? perRes.mult.toFixed(1)+'×' : '—'}</b><span>the citywide rate by residents (≈${perRes?fmt(perRes.residents):'—'} live here)</span></div>
+      <div class="g"><b>${perRes ? perRes.mult.toFixed(1)+'×' : '—'}</b><span>${perRes ? `the citywide rate by residents (≈${fmt(perRes.residents)} live here)` : 'per-resident rate not computed: no residential population counted here'}</span></div>
       <div class="g"><b>${rank?`${rank} of ${base.pctRates.length}`:'—'}</b><span>precinct rank, complaints per square mile (1 = most)</span></div>
     </div>
     <div class="row"><span class="k">How serious were they?</span><span class="v">${fmt(fel)} felonies · ${fmt(mis)} misdemeanors<span class="meta">plus ${fmt(total-fel-mis)} violations (the least serious tier, like open container). Felonies are the most serious; the ${fmt(total)} above counts all three.</span></span></div>`;
