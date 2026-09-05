@@ -355,7 +355,7 @@ function tick(){
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '27'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '28'; // bump when files in data/ change, so cached copies refresh
 const ready = Promise.all([
   ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
   ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
@@ -651,7 +651,7 @@ async function inspect(lat, lng, geoFeature=null){
   html += row('Hurricane evacuation', inZone
       ? `<span class="badge zone${esc(hz)}">Zone ${esc(hz)}</span><span class="meta">Zone 1 evacuates first; zone 6 last</span>`
       : `<span class="badge nozone">Not in an evacuation zone</span>`, inZone ? 'hurricane' : null);
-  if (aq) html += row('Air quality (2023)', `PM2.5 ${aq.pm25} µg/m³ · NO₂ ${aq.no2} ppb<span class="meta">citywide ${DATA.airquality.city.pm25} and ${DATA.airquality.city.no2} · community district annual averages</span>`);
+  if (aq) html += row('Air quality (2024)', `PM2.5 ${aq.pm25} µg/m³ · NO₂ ${aq.no2} ppb<span class="meta">citywide ${DATA.airquality.city.pm25} and ${DATA.airquality.city.no2} · community district annual averages</span>`);
   if (hvi) html += row('Heat vulnerability', `${hvi} of 5<span class="meta">Health department index for ZIP ${esc(zip)}; 5 = most at risk in heat waves</span>`);
   html += commonPlaceHtml(lat, lng);
   html += `<div id="trees"></div><div id="flood"></div>`;
@@ -702,7 +702,7 @@ async function inspect(lat, lng, geoFeature=null){
     ['https://findmypollsite.vote.nyc/', 'Find your poll site'],
     ['https://vote.nyc/', 'Register to vote'],
   ]);
-  html += `<div class="note">Officeholders verified July 2026, from the City Council, the unitedstates legislators project and Open States.</div></section>`;
+  html += `<div class="note">Officeholders verified September 2026, from the City Council, the unitedstates legislators project and Open States.</div></section>`;
 
   /* ----- 3 · living here ----- */
   html += `<section class="blk" id="sec-living"><h3><span class="num">3</span> Living here</h3>`;
@@ -1377,7 +1377,7 @@ function publicArtHtml(lat,lng){
     `<li class="poi" data-lat="${x.lat}" data-lng="${x.lng}" data-name="${esc(x.title)}">
       <span>${esc(x.title)}<span class="sub">${[x.artist, x.yr, x.src==='monument'?'parks monument':'Percent for Art'].filter(Boolean).map(esc).join(' · ')}</span></span>
       <span class="n">${walkmin(x.d)} min</span></li>`).join('')+`</ul>
-    <div class="note" style="margin:0 0 6px">Permanent works from the parks monuments catalog and the Percent for Art program — a subset of the <a href="https://joshgreenman1973.github.io/nyc-public-art-map/" target="_blank" rel="noopener">full public art map</a>, which also covers transit art and temporary installations.</div>`;
+    <div class="note" style="margin:0 0 6px">Permanent works from the parks monuments catalog and the Percent for Art program — a subset of the <a href="https://joshgreenman1973.github.io/experiments/nyc-public-art-map/" target="_blank" rel="noopener">full public art map</a>, which also covers transit art and temporary installations.</div>`;
 }
 function worshipHtml(lat,lng){
   const near = DATA.worship.map(w => ({name:w[0], denom:w[1], lat:w[2], lng:w[3], d:haversine(lat,lng,w[2],w[3])}))
@@ -2211,7 +2211,7 @@ function readMoreBlock(nta, boro, bbl, zip){
     <div class="morelinks" style="margin-top:2px">
       <a href="https://news.google.com/search?q=${q}" target="_blank" rel="noopener">${esc(hood)} in the news</a>
       <a href="https://www.reddit.com/search/?q=${q}" target="_blank" rel="noopener">Reddit conversations</a>
-      <a href="https://www.thecity.nyc/search/?q=${encodeURIComponent(hood)}" target="_blank" rel="noopener">The City coverage</a>
+      <a href="https://www.thecityreporter.nyc/?s=${encodeURIComponent(hood)}" target="_blank" rel="noopener">The City Reporter coverage</a>
       <a href="https://gothamist.com/search?q=${encodeURIComponent(hood)}" target="_blank" rel="noopener">Gothamist coverage</a>
     </div>
     <div class="note">Searches open prefilled on the outside site using the neighborhood name — skim with judgment.</div></section>`;

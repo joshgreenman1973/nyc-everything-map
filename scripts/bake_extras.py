@@ -53,14 +53,16 @@ def landmarks():
     json.dump(list(seen.values()), open(f'{OUT}/landmarks.json', 'w'), ensure_ascii=False)
     print(len(seen), 'landmarks')
 
-def airquality(year=2023):
+def airquality(year=2024):
+    # in 2026 the dataset relabeled time_period from 'Annual Average 2023' to plain '2024' and split each year into
+    # Annual/Summer/Winter mean rows, so the measure filter is now required; match either label
     out = {'cd': {}, 'city': {}}
     for name, key in [('Fine particles (PM 2.5)', 'pm25'), ('Nitrogen dioxide (NO2)', 'no2')]:
         for r in soda('c3uy-2p5r', {'$select': 'geo_join_id,data_value',
-                '$where': f"name='{name}' AND geo_type_name='CD' AND time_period='Annual Average {year}'", '$limit': 100}):
+                '$where': f"name='{name}' AND geo_type_name='CD' AND measure='Annual mean' AND time_period in ('{year}','Annual Average {year}')", '$limit': 100}):
             out['cd'].setdefault(r['geo_join_id'], {})[key] = round(float(r['data_value']), 1)
         c = soda('c3uy-2p5r', {'$select': 'data_value',
-                '$where': f"name='{name}' AND geo_type_name='Citywide' AND time_period='Annual Average {year}'", '$limit': 5})
+                '$where': f"name='{name}' AND geo_type_name='Citywide' AND measure='Annual mean' AND time_period in ('{year}','Annual Average {year}')", '$limit': 5})
         out['city'][key] = round(float(c[0]['data_value']), 1)
     json.dump(out, open(f'{OUT}/airquality.json', 'w'))
     print(len(out['cd']), 'community districts with air quality')
