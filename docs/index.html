@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Everything Map — New York City</title>
 <meta name="description" content="Pick any point in the five boroughs and learn everything about it: neighborhood, representatives, schools, zoning, landmarks, demographics and live city data.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="The everything map">
+<meta property="og:description" content="Pick any point in the five boroughs of New York City and learn what district it sits in, who represents it, what's nearby, what's changing and how the neighborhood lives.">
+<meta property="og:url" content="https://joshgreenman1973.github.io/nyc-everything-map/">
+<meta property="og:image" content="https://joshgreenman1973.github.io/nyc-everything-map/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -74,8 +82,9 @@ body{font-family:'Archivo',sans-serif; color:var(--ink); background:var(--paper)
   background:var(--paper); border-right:2px solid var(--ink); box-shadow:14px 0 50px rgba(22,33,58,.22);
   transform:translateX(-104%); transition:transform .45s cubic-bezier(.22,.9,.32,1); display:flex; flex-direction:column}
 #panel.open{transform:none}
-#panel .scroller{overflow-y:auto; flex:1; overscroll-behavior:contain; scrollbar-width:thin}
-#closepanel{position:absolute; top:12px; right:12px; z-index:5; width:34px; height:34px; border-radius:50%;
+#panel .scroller{position:relative; overflow-y:auto; flex:1; overscroll-behavior:contain; scrollbar-width:thin}
+section.blk, .snapshot{scroll-margin-top:38px}
+#closepanel{position:absolute; top:8px; right:10px; z-index:10; width:32px; height:32px; border-radius:50%;
   border:2px solid var(--ink); background:var(--white); cursor:pointer; font:700 16px/1 'Archivo'; color:var(--ink)}
 #closepanel:hover{background:var(--gold)}
 .phead{background:var(--navy); color:var(--white); padding:26px 26px 20px; position:relative; overflow:hidden}
@@ -103,8 +112,12 @@ section.blk:last-of-type{border-bottom:0}
 .row .v{text-align:right; font-weight:600}
 .row .v .meta{display:block; font-weight:400; font-size:12px; color:#8a8f9e}
 .row.hl{cursor:pointer; transition:background .12s}
-.row.hl:hover{background:#f3e9c8}
-.row.hl:hover .k::after{content:" ⬡"; color:var(--gold-deep)}
+.row.hl:hover, .row.hl.pinned{background:#f3e9c8}
+.row.hl:hover .k::after, .row.hl.pinned .k::after{content:" ⬡"; color:var(--gold-deep)}
+/* phones and tablets can't hover: show the map glyph all the time so rows read as tappable */
+@media (hover:none){ .row.hl .k::after{content:" ⬡"; color:var(--gold-deep)} }
+li.poi{cursor:pointer}
+li.poi.pinned{background:#fdf4dc}
 .row a, ul.toplist a, .cmp .lab a{color:inherit; text-decoration:underline; text-decoration-color:var(--gold-deep); text-underline-offset:2px}
 .bignum{font-family:'Fraunces',serif; font-weight:900; font-size:26px; line-height:1}
 .badge{display:inline-block; font:700 11px 'Archivo'; padding:3px 10px; border-radius:999px; border:1.5px solid currentColor}
@@ -166,6 +179,26 @@ section.blk:last-of-type{border-bottom:0}
 .toc a{font:700 11px 'Archivo'; letter-spacing:.02em; padding:5px 11px; border-radius:999px; cursor:pointer;
   border:1.5px solid var(--line); background:var(--white); color:var(--ink-soft)}
 .toc a:hover{border-color:var(--ink); color:var(--ink); background:var(--gold)}
+/* compact chapter bar: zero height in the flow, slides in once the chapter list scrolls away */
+.chapbar{position:sticky; top:0; height:0; z-index:6}
+.chapbar .in{position:absolute; left:0; right:0; top:0; display:flex; align-items:center; gap:9px;
+  padding:8px 56px 8px 26px; min-height:42px; background:var(--navy); color:#fff; font:700 11px 'Archivo'; letter-spacing:.12em;
+  text-transform:uppercase; transform:translateY(-110%); transition:transform .2s; box-shadow:0 6px 14px rgba(22,33,58,.2)}
+.chapbar.stuck .in{transform:none}
+.chapbar .cn{font-family:'Fraunces',serif; font-weight:900; font-size:15px; color:var(--gold); letter-spacing:0}
+.chapbar .ct{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.chapbar select{margin-left:auto; flex:none; font:600 12px 'Archivo'; text-transform:none; letter-spacing:0; cursor:pointer;
+  border:1.5px solid rgba(255,255,255,.45); background:var(--navy); color:#fff; border-radius:999px; padding:4px 8px; max-width:112px}
+
+/* the area a section's numbers were counted over, drawn on the map */
+#areacap{position:absolute; z-index:1001; left:calc(430px + (100vw - 430px)/2); bottom:58px; transform:translateX(-50%);
+  display:none; align-items:center; gap:10px; max-width:min(460px, calc(100vw - 470px)); background:var(--white);
+  border:2px solid var(--ink); border-radius:999px; padding:6px 8px 6px 14px; box-shadow:0 4px 16px rgba(22,33,58,.2);
+  font:600 12px/1.35 'Archivo'; color:var(--ink)}
+#areacap.show{display:flex}
+#areacap i{flex:none; width:14px; height:14px; border-radius:50%; border:2px dashed #b3382c; background:rgba(179,56,44,.08)}
+#areacap button{flex:none; border:0; background:var(--paper-deep); border-radius:999px; font:700 11px 'Archivo'; padding:4px 9px; cursor:pointer; color:var(--ink-soft)}
+#areacap button:hover{background:var(--gold)}
 
 /* compare bars */
 .cmp{margin:4px 0 10px}
@@ -223,9 +256,12 @@ ul.toplist .sub{display:block; font-size:11.5px; color:#8a8f9e; font-weight:400}
 #methlink:hover{background:var(--gold)}
 
 @media (max-width:720px){
-  #panel{top:auto; height:72vh; width:100vw; border-right:0; border-top:2px solid var(--ink);
+  #panel{top:auto; height:66vh; width:100vw; border-right:0; border-top:2px solid var(--ink);
     border-radius:18px 18px 0 0; transform:translateY(110%)}
   #panel.open{transform:none}
+  #panel .scroller{border-radius:16px 16px 0 0}
+  #areacap{left:50%; bottom:auto; top:calc(34vh - 44px); max-width:calc(100vw - 24px); font-size:11px}
+  body:has(#panel.open) #loadchip{bottom:auto; top:112px}
   #hero{top:8%}
   #methlink{bottom:auto; top:14px; right:12px}
   #aicaution{bottom:auto; top:14px; left:12px; padding:8px 12px}
@@ -239,7 +275,7 @@ ul.toplist .sub{display:block; font-size:11.5px; color:#8a8f9e; font-weight:400}
   html, body { height:auto !important; overflow:visible !important; background:#fff !important; }
   /* hide everything that isn't the panel */
   #map, #hero, #topsearch, #loadchip, #aicaution, #aipop, #methlink,
-  #comparewrap, #bivlegend, .leaflet-control-container, #closepanel,
+  #comparewrap, #bivlegend, .leaflet-control-container, #closepanel, .chapbar, #areacap,
   #panelbody .toc, .phead .actions, .snapshot .chips a::after { display:none !important; }
   /* let the panel become a normal flowing document */
   #panel { position:static !important; transform:none !important; width:100% !important;
@@ -307,6 +343,7 @@ ul.toplist .sub{display:block; font-size:11.5px; color:#8a8f9e; font-weight:400}
 </div>
 
 <div id="loadchip"><span class="dot"></span><span id="loadmsg">Loading boundary layers…</span></div>
+<div id="areacap" role="status"><i></i><span id="areatext"></span><button id="areaoff" title="Stop drawing counting areas while you scroll">Hide</button></div>
 
 <aside id="panel" aria-label="Location details">
   <button id="closepanel" title="Close">×</button>
@@ -347,26 +384,77 @@ fetch('data/cityoutline.json').then(r=>r.json()).then(gj => {
 
 const $ = id => document.getElementById(id);
 const LAYERS = {}, DATA = {};
-const LAYER_FILES = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic','elections','tracts','hoods_alt','hoods_whong'];
-const DATA_FILES = ['officials','nta_demographics','compare_geos','subway','schools','landmarks','airquality','hvi','busstops','neighborhoods_project','hospitals','worship','colleges','artsvenues','publicart','play','parks','libraries','supermarkets','askingrents','transit45','tract_context','restaurants','commonplace','rankings'];
-let loaded = 0, totalFiles = LAYER_FILES.length + DATA_FILES.length;
+// Two waves. The first holds what the top of a report needs (districts, officials,
+// the neighborhood table); a report can open as soon as it lands. The second
+// (restaurants, named places, election districts, tracts and the other nearby
+// lists) starts after it, at low priority, and fills its sections in as it arrives.
+// Boundary layers ship as TopoJSON (shared borders stored once, coordinates
+// quantized to about half a meter, well inside the 2 meter simplification).
+const CORE_LAYERS = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic'];
+const LATE_LAYERS = ['elections','tracts','hoods_alt','hoods_whong'];
+const CORE_DATA = ['officials','nta_demographics','compare_geos','subway','schools','airquality','hvi','hospitals','colleges','libraries','supermarkets','askingrents','parks'];
+const LATE_DATA = ['restaurants','commonplace','busstops','play','artsvenues','publicart','worship','rankings','tract_context','landmarks','neighborhoods_project','transit45'];
+let loaded = 0, totalFiles = CORE_LAYERS.length + LATE_LAYERS.length + CORE_DATA.length + LATE_DATA.length;
 function tick(){
   loaded++;
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '28'; // bump when files in data/ change, so cached copies refresh
-const ready = Promise.all([
-  ...LAYER_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{LAYERS[f]=indexLayer(j); tick();})),
-  ...DATA_FILES.map(f => fetch(`data/${f}.json?v=${DATA_VERSION}`).then(r=>r.json()).then(j=>{DATA[f]=j; tick();}))
-]).catch(e => { $('loadmsg').textContent = 'Some data failed to load — try refreshing.'; console.error(e); });
+const DATA_VERSION = '29'; // bump when files in data/ change, so cached copies refresh
+const FILE_P = {};   // file name -> promise that resolves once it is parsed into LAYERS or DATA
+function loadFile(f, isLayer, init, tries=2){
+  return fetch(`data/${f}${isLayer ? '.topo' : ''}.json?v=${DATA_VERSION}`, init)
+    .then(r => { if (!r.ok) throw new Error(`${f}: ${r.status}`); return r.json(); })
+    .then(j => { if (isLayer) LAYERS[f] = indexLayer(topoToGeo(j)); else DATA[f] = j; tick(); })
+    // one retry after a dropped connection, which phones on the move see often
+    .catch(e => tries > 1 ? new Promise(r => setTimeout(r, 900)).then(() => loadFile(f, isLayer, init, tries-1)) : Promise.reject(e));
+}
+const loadFailed = e => { $('loadmsg').textContent = 'Some data failed to load — try refreshing.'; $('loadchip').classList.remove('done'); console.error(e); };
+const coreReady = Promise.all([
+  ...CORE_LAYERS.map(f => FILE_P[f] = loadFile(f, true)),
+  ...CORE_DATA.map(f => FILE_P[f] = loadFile(f, false)),
+]).catch(loadFailed);
+LATE_LAYERS.forEach(f => FILE_P[f] = coreReady.then(() => loadFile(f, true, {priority:'low'})));
+LATE_DATA.forEach(f => FILE_P[f] = coreReady.then(() => loadFile(f, false, {priority:'low'})));
+const allReady = Promise.all(Object.values(FILE_P)).catch(loadFailed);
+const have = files => files.every(f => LAYERS[f] || DATA[f]);
+/* Render now if the files are here; otherwise leave a placeholder and fill it in
+   when they land. A placeholder whose report has since been replaced is simply gone. */
+let _laterSeq = 0;
+function later(files, build, wait='<span class="spin"></span>'){
+  if (have(files)) return build();
+  const id = 'later' + (++_laterSeq);
+  Promise.all(files.map(f => FILE_P[f])).then(() => {
+    const el = document.getElementById(id);
+    if (el) el.outerHTML = build();
+  }).catch(() => { document.getElementById(id)?.remove(); });
+  return `<div id="${id}">${wait}</div>`;
+}
+/* TopoJSON -> GeoJSON. Arcs are delta-encoded integers on a quantized grid; a
+   negative arc index (~i) means arc i walked backwards. */
+function topoToGeo(t){
+  const [sx, sy] = t.transform.scale, [tx, ty] = t.transform.translate;
+  const arcs = t.arcs.map(arc => { let x = 0, y = 0; return arc.map(([dx, dy]) => [(x += dx) * sx + tx, (y += dy) * sy + ty]); });
+  const ring = ids => {
+    const pts = [];
+    ids.forEach((i, k) => {
+      const a = i < 0 ? arcs[~i].slice().reverse() : arcs[i];
+      (k ? a.slice(1) : a).forEach(p => pts.push(p));
+    });
+    return pts;
+  };
+  const geom = g => g.type === 'Polygon' ? {type:'Polygon', coordinates: g.arcs.map(ring)}
+    : g.type === 'MultiPolygon' ? {type:'MultiPolygon', coordinates: g.arcs.map(p => p.map(ring))} : null;
+  const obj = t.objects[Object.keys(t.objects)[0]];
+  return {type:'FeatureCollection', features: obj.geometries.map(g => ({type:'Feature', properties: g.properties || {}, geometry: geom(g)}))};
+}
 
 /* ---------- point-in-polygon ---------- */
 function ringContains(ring,x,y){let inside=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){const xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))inside=!inside;}return inside;}
 function polyContains(c,x,y){if(!ringContains(c[0],x,y))return false;for(let k=1;k<c.length;k++)if(ringContains(c[k],x,y))return false;return true;}
 function featContains(f,x,y){const g=f.geometry;if(!g)return false;if(g.type==='Polygon')return polyContains(g.coordinates,x,y);if(g.type==='MultiPolygon')return g.coordinates.some(p=>polyContains(p,x,y));return false;}
 function bboxOf(g){let a=180,b=90,c=-180,d=-90;const s=r=>r.forEach(([x,y])=>{if(x<a)a=x;if(x>c)c=x;if(y<b)b=y;if(y>d)d=y;});(g.type==='Polygon'?[g.coordinates]:g.coordinates).forEach(p=>p.forEach(s));return[a,b,c,d];}
-function indexLayer(gj){gj.features.forEach(f=>f._bb=bboxOf(f.geometry));return gj;}
+function indexLayer(gj){gj.features.forEach(f=>f._bb=f.geometry?bboxOf(f.geometry):[1,1,-1,-1]);return gj;}
 function lookup(layer,lat,lng){if(!layer)return null;for(const f of layer.features){const b=f._bb;if(lng<b[0]||lng>b[2]||lat<b[1]||lat>b[3])continue;if(featContains(f,lng,lat))return f;}return null;}
 
 /* ---------- geocoding ---------- */
@@ -440,7 +528,7 @@ function wireSearch(inputEl, listEl){
         return;
       }
       listEl.innerHTML = items.map((f,i) =>
-        `<div data-i="${i}">${f.properties.name}<span class="muted"> — ${f.properties.borough||''} ${f.properties.postalcode||''}</span></div>`).join('');
+        `<div data-i="${i}">${esc(niceAddress(f.properties.name))}<span class="muted"> — ${f.properties.borough||''} ${f.properties.postalcode||''}</span></div>`).join('');
       listEl.style.display = items.length ? 'block' : 'none';
     }, 220);
   });
@@ -489,18 +577,206 @@ function dropPin(lat,lng){
     `<svg width="34" height="46" viewBox="0 0 34 46"><path d="M17 1C8.2 1 1 8.2 1 17c0 11.5 16 28 16 28s16-16.5 16-28C33 8.2 25.8 1 17 1z" fill="#f2b418" stroke="#16213a" stroke-width="2.5"/><circle cx="17" cy="17" r="6" fill="#16213a"/></svg>`,
     iconSize:[34,46], iconAnchor:[17,45]})}).addTo(map);
 }
-function showShape(feature){
-  clearShape();
-  if (!feature) return;
-  hoverShape = L.geoJSON(feature, {style:{color:'#16213a', weight:2.5, fillColor:'#f2b418', fillOpacity:.22, dashArray:'2 6'}}).addTo(map);
+/* The part of the map the report panel and search bar leave uncovered, as Leaflet
+   padding. On a phone the panel is a bottom sheet, so the open map is a strip on top. */
+function mapPadding(assumeOpen){
+  const open = assumeOpen || $('panel').classList.contains('open');
+  if (window.innerWidth > 720) return {tl:[(open ? $('panel').offsetWidth : 0) + 24, 70], br:[24, 44]};
+  const ts = $('topsearch');
+  const top = (ts.style.display === 'block' ? ts.getBoundingClientRect().bottom : 56) + 8;
+  return {tl:[12, top], br:[12, (open ? $('panel').offsetHeight : 0) + 8]};
 }
-function clearShape(){ if (hoverShape){ map.removeLayer(hoverShape); hoverShape=null; } }
-function showPoi(lat,lng,label){
-  clearPoi();
+/* the map center that puts a point in the middle of that uncovered part */
+function centerVisible(lat, lng, z){
+  const pad = mapPadding(true), sz = map.getSize();
+  const vx = (pad.tl[0] + sz.x - pad.br[0]) / 2;
+  const vy = (pad.tl[1] + sz.y - pad.br[1]) / 2 + 23;   // the pin's tip sits half an icon below its middle
+  return map.unproject(map.project([lat,lng], z).add([sz.x/2 - vx, sz.y/2 - vy]), z);
+}
+let userMovedAt = 0;
+map.on('dragstart', () => userMovedAt = Date.now());
+map.getContainer().addEventListener('wheel', () => userMovedAt = Date.now(), {passive:true});
+/* Bring a shape into the uncovered part of the map. With onlyIfNeeded, leave the map
+   alone when the shape is already in view at a readable size. */
+function fitVisible(bounds, onlyIfNeeded){
+  if (!bounds || !bounds.isValid()) return;
+  const pad = mapPadding(), sz = map.getSize();
+  if (sz.x <= 0 || sz.y <= 0) return;
+  if (onlyIfNeeded){
+    const a = map.latLngToContainerPoint(bounds.getNorthWest()), b = map.latLngToContainerPoint(bounds.getSouthEast());
+    const visW = sz.x - pad.tl[0] - pad.br[0], visH = sz.y - pad.tl[1] - pad.br[1];
+    const inside = a.x >= pad.tl[0] && a.y >= pad.tl[1] && b.x <= sz.x - pad.br[0] && b.y <= sz.y - pad.br[1];
+    if (inside && Math.max((b.x - a.x)/visW, (b.y - a.y)/visH) > .22) return;
+  }
+  map.flyToBounds(bounds, {paddingTopLeft:pad.tl, paddingBottomRight:pad.br, maxZoom:17, duration:.6});
+}
+/* District outlines. Hovering a row draws its district; tapping (or clicking) a row
+   keeps it drawn and brings it into view, which is how phones see them. */
+let pinnedShape = null, pinnedRow = null;
+const SHAPE_STYLE = {color:'#16213a', weight:2.5, fillColor:'#f2b418', fillOpacity:.22, dashArray:'2 6', interactive:false};
+function drawShape(feature){
+  if (hoverShape){ map.removeLayer(hoverShape); hoverShape = null; }
+  if (feature?.geometry) hoverShape = L.geoJSON(feature, {style:SHAPE_STYLE, interactive:false}).addTo(map);
+}
+function showShape(feature){ drawShape(feature); }
+function clearShape(){ drawShape(pinnedShape); }
+function unpinShape(){ pinnedRow?.classList.remove('pinned'); pinnedShape = pinnedRow = null; drawShape(null); }
+function pinShape(feature, rowEl){
+  const same = pinnedShape && pinnedShape === feature;
+  unpinShape();
+  if (!feature?.geometry || same) return;
+  pinnedShape = feature; pinnedRow = rowEl; rowEl?.classList.add('pinned');
+  drawShape(feature);
+  fitVisible(hoverShape.getBounds(), true);
+}
+let pinnedPoi = null;
+function drawPoi(lat,lng,label){
+  if (poiLayer){ map.removeLayer(poiLayer); poiLayer = null; }
+  if (lat == null) return;
   poiLayer = L.circleMarker([lat,lng],{radius:9,color:'#16213a',weight:2,fillColor:'#b6539f',fillOpacity:.85})
     .addTo(map).bindTooltip(label,{permanent:true,direction:'top',offset:[0,-10]}).openTooltip();
 }
-function clearPoi(){ if (poiLayer){ map.removeLayer(poiLayer); poiLayer=null; } }
+function showPoi(lat,lng,label){ drawPoi(lat,lng,label); }
+function clearPoi(){ pinnedPoi ? drawPoi(+pinnedPoi.dataset.lat, +pinnedPoi.dataset.lng, pinnedPoi.dataset.name) : drawPoi(null); }
+function unpinPoi(){ pinnedPoi?.classList.remove('pinned'); pinnedPoi = null; drawPoi(null); }
+function pinPoi(li){
+  const same = pinnedPoi === li;
+  unpinPoi();
+  if (same) return;
+  pinnedPoi = li; li.classList.add('pinned');
+  const lat = +li.dataset.lat, lng = +li.dataset.lng;
+  drawPoi(lat, lng, li.dataset.name);
+  if (current) fitVisible(L.latLngBounds([[lat,lng],[current.lat,current.lng]]), true);
+}
+
+/* ---------- counting areas ----------
+   The report counts things over a dozen different areas: a 200 meter circle for
+   trees, 500 meters for crime, the precinct for CompStat, the neighborhood for
+   building filings, the ZIP code for film shoots. As the reader scrolls, the map
+   draws the area behind whatever block sits at the panel's reading line, so every
+   count shows what it covers. Blocks declare it with data-area:
+   "c:250" (circle, meters) · "c:400,800" (two rings) · "box:dLat:dLng" ·
+   "layer:<boundary layer>" · "zip" (census ZIP code tabulation area, fetched live). */
+let areaLayer = null, areaKey = null, areasOff = false, areaSeq = 0;
+const AREA_STYLE = {color:'#b3382c', weight:2, dashArray:'6 5', fillColor:'#b3382c', fillOpacity:.05, interactive:false};
+const _zipShape = {};
+function zipShape(zip){
+  if (!_zipShape[zip]) _zipShape[zip] = soda('pri4-ifjk', {'$select':'the_geom,label', '$where':`label like '%${zip.replace(/\D/g,'')}%'`})
+    .then(r => r[0]?.the_geom ? {type:'Feature', properties:{}, geometry:r[0].the_geom} : null).catch(() => null);
+  return _zipShape[zip];
+}
+function clearArea(){
+  areaKey = null;
+  if (areaLayer){ map.removeLayer(areaLayer); areaLayer = null; }
+  $('areacap').classList.remove('show');
+}
+async function showArea(spec, label){
+  if (!current) return;
+  const key = spec + '|' + label;
+  if (key === areaKey) return;
+  clearArea();
+  areaKey = key;
+  const my = ++areaSeq, {lat, lng} = current;
+  const [kind, a, b] = spec.split(':');
+  let lyr = null;
+  if (kind === 'c'){
+    const radii = a.split(',').map(Number);
+    lyr = L.layerGroup(radii.map((r,i) => L.circle([lat,lng], {radius:r, ...AREA_STYLE, ...(i < radii.length-1 ? {fillOpacity:0, dashArray:'2 5', weight:1.5} : {})})));
+  } else if (kind === 'box'){
+    lyr = L.rectangle([[lat-(+a), lng-(+b)], [lat+(+a), lng+(+b)]], AREA_STYLE);
+  } else if (kind === 'layer'){
+    const f = layerFeat(a);
+    if (f?.geometry) lyr = L.geoJSON(f, {style:AREA_STYLE, interactive:false});
+  } else if (kind === 'zip' && activeCtx?.zip){
+    const f = await zipShape(activeCtx.zip);
+    if (my !== areaSeq || !f) return;
+    lyr = L.geoJSON(f, {style:AREA_STYLE, interactive:false});
+  }
+  if (!lyr || my !== areaSeq) return;
+  areaLayer = lyr.addTo(map);
+  $('areatext').textContent = label;
+  $('areacap').classList.add('show');
+  if (Date.now() - userMovedAt > 8000){
+    const bounds = lyr.getBounds ? lyr.getBounds() : L.featureGroup(lyr.getLayers()).getBounds();
+    fitVisible(bounds, true);
+  }
+}
+/* the innermost block with a counting area that crosses the panel's reading line,
+   and the section the line is in */
+function areaAtReadingLine(){
+  const sc = $('panelbody'), top = sc.getBoundingClientRect().top, line = top + sc.clientHeight * .4;
+  const crosses = el => { const r = el.getBoundingClientRect(); return r.height > 0 && r.top <= line && r.bottom >= line; };
+  let hit = null, sec = null;
+  sc.querySelectorAll('[data-area]').forEach(el => { if (crosses(el)) hit = el; });
+  sc.querySelectorAll('section.blk').forEach(el => { if (crosses(el)) sec = el; });
+  return {hit, sec};
+}
+let lastAreaEl = null;
+let _areaRaf = 0;
+function updateArea(){
+  if (_areaRaf) return;
+  _areaRaf = requestAnimationFrame(() => {
+    _areaRaf = 0;
+    if (areasOff || !$('panel').classList.contains('open')) return;
+    const {hit, sec} = areaAtReadingLine();
+    if (hit){ lastAreaEl = hit; showArea(hit.dataset.area, hit.dataset.areaLabel || ''); }
+    // between two counted blocks (a subheading, a note) keep the last area while still in its section
+    else if (areaKey && !(lastAreaEl?.isConnected && sec && sec.contains(lastAreaEl))) clearArea();
+  });
+}
+$('areaoff').addEventListener('click', () => { areasOff = true; clearArea(); });
+/* data-area attributes for a block */
+const areaAttr = (spec, label) => ` data-area="${spec}" data-area-label="${esc(label)}"`;
+
+/* The current report's district features, looked up once each on demand. */
+let _feat = {};
+function layerFeat(key){
+  if (!current || !LAYERS[key]) return null;
+  if (!(key in _feat)) _feat[key] = lookup(LAYERS[key], current.lat, current.lng);
+  return _feat[key];
+}
+
+/* One set of listeners on the panel serves every report, including blocks that
+   fill in later: hover previews, taps pin, chapter links jump. */
+(function wirePanel(){
+  const PB = $('panelbody');
+  let hovRow = null, hovPoi = null;
+  PB.addEventListener('mouseover', e => {
+    const r = e.target.closest('.row.hl[data-layer]');
+    if (r !== hovRow){ hovRow = r; r ? showShape(layerFeat(r.dataset.layer)) : clearShape(); }
+    const p = e.target.closest('li.poi');
+    if (p !== hovPoi){ hovPoi = p; p ? showPoi(+p.dataset.lat, +p.dataset.lng, p.dataset.name) : clearPoi(); }
+  });
+  PB.addEventListener('mouseleave', () => { hovRow = hovPoi = null; clearShape(); clearPoi(); });
+  PB.addEventListener('click', e => {
+    const jump = e.target.closest('[data-sec]');
+    if (jump){ document.getElementById(jump.dataset.sec)?.scrollIntoView({behavior:'smooth', block:'start'}); return; }
+    if (e.target.closest('a, button, select, input')) return;
+    const r = e.target.closest('.row.hl[data-layer]');
+    if (r){ pinShape(layerFeat(r.dataset.layer), r); return; }
+    const p = e.target.closest('li.poi');
+    if (p) pinPoi(p);
+  });
+  PB.addEventListener('change', e => {
+    if (e.target.id !== 'chapjump' || !e.target.value) return;
+    document.getElementById(e.target.value)?.scrollIntoView({behavior:'smooth', block:'start'});
+    e.target.value = '';
+  });
+})();
+/* the slim chapter bar that takes over once the chapter list scrolls away */
+function updateChapbar(){
+  const sc = $('panelbody'), bar = $('chapbar'), toc = sc.querySelector('.toc');
+  if (!bar || !toc) return;
+  const top = sc.getBoundingClientRect().top;
+  bar.classList.toggle('stuck', toc.getBoundingClientRect().bottom <= top + 1);
+  let cur = null;
+  // the chapter being read: the last one whose heading has reached the top quarter of the panel
+  sc.querySelectorAll('section.blk[id]').forEach(s => { if (s.getBoundingClientRect().top - top <= sc.clientHeight * .25) cur = s; });
+  const num = cur?.querySelector('h3 .num')?.textContent || '';
+  const title = cur ? cur.querySelector('h3')?.textContent.replace(num, '').trim() : 'The report';
+  if ($('chapnum').textContent !== num) $('chapnum').textContent = num;
+  if ($('chaptitle').textContent !== title) $('chaptitle').textContent = title;
+}
 
 /* ============================== helpers ============================== */
 const fmt = n => n==null ? '—' : (+n).toLocaleString('en-US');
@@ -552,27 +828,55 @@ function schoolLinks(p){
   const anyNamed = dbns.some(d => schoolName(d.trim()));
   return `${links}<span class="meta">${esc(anyNamed ? dbns.join(', ') : p.label)}</span>`;
 }
+/* A zone row. Where the city's zone file assigns no school, its label is a code
+   ("D15") or a choice-district area name; say what the file means rather than
+   printing the code. The file's remark for every "D" zone reads "Zoned to District N.
+   No zoned school. Contact 718-935-2009 for more information." */
+function zoneRow(label, p, layerKey){
+  if (!p || (!p.dbn && !p.label)) return row(label, `<span class="meta" style="display:inline">No zoned school — choice or unzoned area</span>`);
+  if (!p.dbn){
+    const d = /^D(\d+)$/.exec(p.label);
+    if (d) return row(label, `No zoned school<span class="meta">The city's zone file puts this address in District ${d[1]} with no zoned school · 718-935-2009 for more information</span>`, layerKey);
+    if (/priority area/i.test(p.label)) return row(label, `No zoned school<span class="meta">${esc(p.label)} of a choice district, per the city's zone file</span>`, layerKey);
+  }
+  return row(label, schoolLinks(p), layerKey);
+}
+const ORDWORD = ['','First','Second','Third','Fourth','Fifth','Sixth','Seventh','Eighth','Ninth'];
+const STREET_AFTER_NUMBER = /(\S)(\s+)(\d+)(?=\s+(?:Street|Avenue|Road|Place|Drive|Lane|Terrace|Court|Boulevard|Parkway|Walk|Loop|Path|Plaza|St|Ave|Av|Rd|Pl|Dr|Blvd)\b)/g;
+/* City files print addresses in capitals with bare street numbers ("160 5 AVENUE").
+   Title-case them and write numbered streets the AP way: First through Ninth, then
+   10th, 23rd. Only a number that follows another word or number is a street number,
+   so a house number ("100 Avenue A") is left alone. */
+function niceAddress(s){
+  if (!s) return s;
+  let t = /[a-z]/.test(s) ? String(s) : titleWords(s);
+  t = t.replace(STREET_AFTER_NUMBER, (m, a, sp, n) => a + sp + (+n >= 1 && +n <= 9 ? ORDWORD[+n] : ordinal(n)));
+  t = t.replace(/ (Of|The|And|Between|At|To)(?= )/g, m => m.toLowerCase());
+  return t.replace(/\bMc([a-z])/g, (m, c) => 'Mc' + c.toUpperCase()).replace(/\bO'([a-z])/g, (m, c) => "O'" + c.toUpperCase());
+}
+/* names that arrive all in capitals ("UNSANITARY CONDITION") get title case; mixed case is left as written */
+const unshout = s => /[a-z]/.test(s || '') ? s : titleWords(s);
 const LANDUSE = {1:'One and two family buildings',2:'Multifamily walk-up',3:'Multifamily with elevator',4:'Mixed residential and commercial',5:'Commercial and office',6:'Industrial and manufacturing',7:'Transportation and utility',8:'Public facilities and institutions',9:'Open space and outdoor recreation',10:'Parking facilities',11:'Vacant land'};
 const LINECOLORS = {'1':'#EE352E','2':'#EE352E','3':'#EE352E','4':'#00933C','5':'#00933C','6':'#00933C','7':'#B933AD','A':'#0039A6','C':'#0039A6','E':'#0039A6','B':'#FF6319','D':'#FF6319','F':'#FF6319','M':'#FF6319','G':'#6CBE45','J':'#996633','Z':'#996633','L':'#A7A9AC','N':'#FCCC0A','Q':'#FCCC0A','R':'#FCCC0A','W':'#FCCC0A','S':'#808183','SIR':'#0078C6'};
 
 /* ============================== inspect ============================== */
 let current = null;
 async function inspect(lat, lng, geoFeature=null){
-  await ready;
+  await coreReady;
   if (lat<40.46 || lat>40.95 || lng<-74.30 || lng>-73.65){ alert('That point is outside New York City.'); return; }
   current = {lat,lng};
+  _feat = {};
+  unpinShape(); unpinPoi(); clearArea();
   history.replaceState(null,'',`#${lat.toFixed(5)},${lng.toFixed(5)}`);
   $('hero').classList.add('hidden');
   $('topsearch').style.display='block';
-  dropPin(lat,lng); clearPoi();
+  dropPin(lat,lng);
   const z = Math.max(map.getZoom(), 14);
-  // offset the centering so the panel doesn't cover the pin; guard against a zero-size map
+  // center the pin in the part of the map the panel leaves open; guard against a zero-size map
   try {
     const sz = map.getSize();
     if (sz.x > 0 && sz.y > 0){
-      const desktop = window.innerWidth > 720;
-      const px = map.project([lat,lng], z);
-      const target = map.unproject(desktop ? px.subtract([215,0]) : px.add([0, sz.y*0.18]), z);
+      const target = centerVisible(lat, lng, z);
       if (isFinite(target.lat) && isFinite(target.lng)) map.flyTo(target, z, {duration:.7});
       else map.setView([lat,lng], z);
     } else { map.setView([lat,lng], z); }
@@ -598,20 +902,24 @@ async function inspect(lat, lng, geoFeature=null){
   const O = DATA.officials;
 
   /* ----- header ----- */
-  const addrLine = props.name ? esc(props.name) : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  const addrLine = props.name ? esc(niceAddress(props.name)) : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
   const subBits = [boro, zip ? 'ZIP ' + esc(zip) : null].filter(Boolean).join(' · ');
   // Suppress the gazetteer line when the geocoder already titled the report
   // with the same place ("NY Stock Exchange" over "NY Stock Exchange").
-  let here = placeHere(lat, lng);
-  if (here && props.name){
-    const norm = s => s.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-    const a = norm(props.name), b = norm(here.name);
-    if (a === b || a.includes(b) || b.includes(a)) here = null;
-  }
+  const hereHtml = () => {
+    const here = placeHere(lat, lng);
+    if (!here) return '';
+    if (props.name){
+      const norm = s => s.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+      const a = norm(props.name), b = norm(here.name);
+      if (a === b || a.includes(b) || b.includes(a)) return '';
+    }
+    return `<div class="cphere">The city knows this spot as <b>${esc(here.name)}</b><span>${esc(here.type.toLowerCase())} · named by ${esc(cpAgency(here.src))}</span></div>`;
+  };
   let html = `<div class="phead">
     <div class="kicker">Point report</div>
     <h2>${addrLine}</h2>
-    ${here ? `<div class="cphere">The city knows this spot as <b>${esc(here.name)}</b><span>${esc(here.type.toLowerCase())} · named by ${esc(cpAgency(here.src))}</span></div>` : ''}
+    ${later(['commonplace'], hereHtml, '')}
     <div class="sub">${nta ? `<b style="color:#fff">${esc(nta.properties.ntaname)}</b> · ` : ''}${subBits}<span id="elev"></span></div>
     ${geoOsm ? `<div class="nearnote">City geocoder is down — address from OpenStreetMap; tax-lot details unavailable until it is back.</div>` : ''}
     ${revDist!=null && revDist>40 ? `<div class="nearnote">Nearest address point, ${Math.round(revDist)} meters from where you clicked</div>` : ''}
@@ -628,6 +936,8 @@ async function inspect(lat, lng, geoFeature=null){
   /* ----- table of contents ----- */
   const TOC = [['place','The place'],['people','Who represents it'],['living','Living here'],['safety','Safety'],['lot','Lot & housing'],['changing','What’s changing'],['lore','Lore'],['numbers','By the numbers'],['crossed','Two factors']];
   html += `<nav class="toc">`+TOC.map(([id,label])=>`<a data-sec="sec-${id}">${label}</a>`).join('')+`</nav>`;
+  html += `<div class="chapbar" id="chapbar"><div class="in"><span class="cn" id="chapnum"></span><span class="ct" id="chaptitle"></span>
+    <select id="chapjump" aria-label="Jump to a chapter"><option value="">Jump to…</option>${TOC.map(([id,label])=>`<option value="sec-${id}">${label}</option>`).join('')}<option value="sec-saying">What people are saying</option></select></div></div>`;
 
   /* ----- 1 · the place ----- */
   const hz = hurr?.properties.hurricane_;
@@ -640,8 +950,10 @@ async function inspect(lat, lng, geoFeature=null){
   if (nta){
     const cdtaName = (nta.properties.cdtaname||'').replace(/^\w+\d+\s/,'').replace(/\s\(CD \d+ (Equivalent|Approximation)\)/,'');
     html += row('Neighborhood', `${esc(nta.properties.ntaname)}<span class="meta">Neighborhood tabulation area ${esc(nta.properties.nta2020)}</span>`, 'nta');
-    const alts = altNeighborhoods(lat, lng, nta, props);
-    if (alts.length) html += `<div class="note" style="margin:-2px 0 8px">Other maps put this spot in <b>${alts.map(esc).join('</b> or <b>')}</b> — neighborhood borders are unofficial, and every map draws them differently.</div>`;
+    html += later(['hoods_alt','hoods_whong'], () => {
+      const alts = altNeighborhoods(lat, lng, nta, props);
+      return alts.length ? `<div class="note" style="margin:-2px 0 8px">Other maps put this spot in <b>${alts.map(esc).join('</b> or <b>')}</b> — neighborhood borders are unofficial, and every map draws them differently.</div>` : '';
+    }, '');
     html += row('Borough', esc(boro));
     if (cd) html += row('Community district', `${esc(boro)} CD ${+cdCode.slice(1)}<span class="meta">Community Board ${+cdCode.slice(1)}${cdtaName?' · '+esc(cdtaName):''}</span>`, 'cd');
   } else {
@@ -651,10 +963,10 @@ async function inspect(lat, lng, geoFeature=null){
   html += row('Hurricane evacuation', inZone
       ? `<span class="badge zone${esc(hz)}">Zone ${esc(hz)}</span><span class="meta">Zone 1 evacuates first; zone 6 last</span>`
       : `<span class="badge nozone">Not in an evacuation zone</span>`, inZone ? 'hurricane' : null);
-  if (aq) html += row('Air quality (2024)', `PM2.5 ${aq.pm25} µg/m³ · NO₂ ${aq.no2} ppb<span class="meta">citywide ${DATA.airquality.city.pm25} and ${DATA.airquality.city.no2} · community district annual averages</span>`);
-  if (hvi) html += row('Heat vulnerability', `${hvi} of 5<span class="meta">Health department index for ZIP ${esc(zip)}; 5 = most at risk in heat waves</span>`);
-  html += commonPlaceHtml(lat, lng);
-  html += `<div id="trees"></div><div id="flood"></div>`;
+  if (aq) html += `<div${areaAttr('layer:cd', 'Air quality: averaged over the whole community district')}>` + row('Air quality (2024)', `PM2.5 ${aq.pm25} µg/m³ · NO₂ ${aq.no2} ppb<span class="meta">citywide ${DATA.airquality.city.pm25} and ${DATA.airquality.city.no2} · community district annual averages</span>`) + `</div>`;
+  if (hvi) html += `<div${areaAttr('zip', `Heat vulnerability: ZIP ${zip} (census approximation of the ZIP code)`)}>` + row('Heat vulnerability', `${hvi} of 5<span class="meta">Health department index for ZIP ${esc(zip)}; 5 = most at risk in heat waves</span>`) + `</div>`;
+  html += `<div${areaAttr('c:500', 'Named places: within 500 meters')}>` + later(['commonplace'], () => commonPlaceHtml(lat, lng)) + `</div>`;
+  html += `<div id="trees"${areaAttr('c:200', 'Street trees: within 200 meters')}></div><div id="flood"></div>`;
   html += morelinks([
     nta && [`https://popfactfinder.planning.nyc.gov/explorer?geotype=NTA2020&geoids=${esc(nta.properties.nta2020)}`, 'Full census profile'],
     [`https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(hood + ', ' + (boro||'New York City'))}`, `${esc(hood)} on Wikipedia`],
@@ -688,16 +1000,18 @@ async function inspect(lat, lng, geoFeature=null){
   html += row('Public advocate', `${esc(O.citywide.public_advocate.name)}${partyTag(O.citywide.public_advocate.party)}`);
   html += row('Comptroller', `${esc(O.citywide.comptroller.name)}${partyTag(O.citywide.comptroller.party)}`);
   html += row('United States Senate', O.citywide.us_senators.map(s=>esc(s.name)).join('<br>'));
-  const edFeat = lookup(LAYERS.elections, lat, lng);
-  if (edFeat){
+  html += later(['elections'], () => {
+    const edFeat = layerFeat('elections');
+    if (!edFeat) return '';
     const e = edFeat.properties;
-    html += `<div class="subhead">How this election district voted</div>`;
-    if (e.g_win) html += row('2025 mayoral general', `${esc(e.g_win.split(' ').pop())} ${pct(e.g_pct)}<span class="meta">Mamdani ${pct(e.g_mamdani)} · Cuomo ${pct(e.g_cuomo)} · Sliwa ${pct(e.g_sliwa)} · ${fmt(e.g_ballots)} ballots</span>`, 'elections');
-    if (e.p_win) html += row('2025 Democratic primary (final round)', `${esc(e.p_win.split(' ').pop())} ${pct(e.p_pct)}<span class="meta">Mamdani ${pct(e.p_mamdani)} · Cuomo ${pct(e.p_cuomo)} · ${fmt(e.p_ballots)} ballots</span>`, 'elections');
-    if (e.x_total) html += row('2024 presidential', `${e.x_harris >= e.x_trump ? 'Harris '+pct(e.x_harris) : 'Trump '+pct(e.x_trump)}<span class="meta">Harris ${pct(e.x_harris)} · Trump ${pct(e.x_trump)} · ${fmt(e.x_total)} votes (citywide: Harris 69.0)${e.x_joint?` · counted jointly with ED ${e.x_joint}`:''}</span>`, 'elections');
-    else if (e.g_win) html += row('2024 presidential', `<span class="meta" style="display:inline">No separate 2024 tally — the board merged this district's votes in a way the certified file does not resolve</span>`);
-    html += `<div class="note" style="margin:2px 0 8px">Election district ${esc(e.ed)} — a few square blocks, so small numbers; the primary shows the final ranked-choice round. Certified Board of Elections results; districts the board combined may be missing a year.</div>`;
-  }
+    let h = `<div${areaAttr('layer:elections', `Votes: election district ${e.ed}`)}><div class="subhead">How this election district voted</div>`;
+    if (e.g_win) h += row('2025 mayoral general', `${esc(e.g_win.split(' ').pop())} ${pct(e.g_pct)}<span class="meta">Mamdani ${pct(e.g_mamdani)} · Cuomo ${pct(e.g_cuomo)} · Sliwa ${pct(e.g_sliwa)} · ${fmt(e.g_ballots)} ballots</span>`, 'elections');
+    if (e.p_win) h += row('2025 Democratic primary (final round)', `${esc(e.p_win.split(' ').pop())} ${pct(e.p_pct)}<span class="meta">Mamdani ${pct(e.p_mamdani)} · Cuomo ${pct(e.p_cuomo)} · ${fmt(e.p_ballots)} ballots</span>`, 'elections');
+    if (e.x_total) h += row('2024 presidential', `${e.x_harris >= e.x_trump ? 'Harris '+pct(e.x_harris) : 'Trump '+pct(e.x_trump)}<span class="meta">Harris ${pct(e.x_harris)} · Trump ${pct(e.x_trump)} of ${fmt(e.x_total)} votes cast for the two · citywide, Harris 69.4%${e.x_joint?` · counted jointly with ED ${e.x_joint}`:''}</span>`, 'elections');
+    else if (e.g_win) h += row('2024 presidential', `<span class="meta" style="display:inline">No separate 2024 tally — the board merged this district's votes in a way the certified file does not resolve</span>`);
+    h += `<div class="note" style="margin:2px 0 8px">Election district ${esc(e.ed)} — a few square blocks, so small numbers; the primary shows the final ranked-choice round. Certified Board of Elections results; districts the board combined may be missing a year.</div></div>`;
+    return h;
+  });
   html += morelinks([
     ['https://findmypollsite.vote.nyc/', 'Find your poll site'],
     ['https://vote.nyc/', 'Register to vote'],
@@ -707,28 +1021,27 @@ async function inspect(lat, lng, geoFeature=null){
   /* ----- 3 · living here ----- */
   html += `<section class="blk" id="sec-living"><h3><span class="num">3</span> Living here</h3>`;
   // mobility first (the most universal daily need), then education, health, faith, then block conditions
-  html += `<div class="subhead" style="margin-top:0">Getting around</div>` + subwayHtml(lat,lng) + busHtml(lat,lng) + `<div id="bike"></div>
+  html += `<div class="subhead" style="margin-top:0">Getting around</div>` + subwayHtml(lat,lng) + later(['busstops'], () => busHtml(lat,lng)) + `<div id="bike"></div>
     <div class="morelinks" style="margin-top:6px"><a href="#" id="reach45btn" style="border-color:var(--gold-deep)">Show my 45-minute transit reach</a></div>
     <div id="reach45stat"></div>`;
   html += `<div class="subhead">Groceries</div>` + supermarketHtml(lat,lng);
-  html += `<div class="subhead">Eating nearby</div>` + cuisineHtml(lat,lng);
-  html += `<div class="subhead">Play</div>` + playHtml(lat,lng);
+  html += `<div class="subhead">Eating nearby</div><div${areaAttr('c:800', 'Restaurants: within 800 meters, about a 10 minute walk')}>` + later(['restaurants'], () => cuisineHtml(lat,lng)) + `</div>`;
+  html += `<div class="subhead">Play</div><div${areaAttr('c:400,800', 'Parks and play: within 5 and 10 minute walks (400 and 800 meters)')}>` + later(['play'], () => playHtml(lat,lng)) + `</div>`;
   html += `<div class="subhead">Schools</div>`;
   if (sd) html += row('School district', `District ${+sd.properties.schooldist}`, 'schooldist');
-  if (es?.properties.label) html += row('Zoned elementary', schoolLinks(es.properties), 'eszones');
-  else html += row('Zoned elementary', `<span class="meta" style="display:inline">No zoned school — choice or unzoned area</span>`);
-  if (ms?.properties.label) html += row('Zoned middle school', schoolLinks(ms.properties), 'mszones');
+  html += zoneRow('Zoned elementary', es?.properties, 'eszones');
+  if (ms?.properties.label) html += zoneRow('Zoned middle school', ms.properties, 'mszones');
   html += nearestSchools(lat,lng) + `
   <div class="note" style="margin-bottom:4px">Zones are 2024-2025; locations are the Department of Education's latest published point file (2019-20) with 2021-22 enrollment; reading and math proficiency are the 2023 state tests and graduation rates are the class of 2023 — confirm with MySchools before enrolling. School links go to the DOE page; "profile" links go to InsideSchools.</div>`;
   html += `<div class="subhead">Colleges nearby</div>` + collegeHtml(lat,lng);
   html += `<div class="subhead">Health</div>` + hospitalHtml(lat,lng);
-  html += `<div class="subhead">Faith</div>` + worshipHtml(lat,lng);
-  html += `<div class="subhead">Arts and culture</div>` + artsHtml(lat,lng) + libraryHtml(lat,lng) + publicArtHtml(lat,lng);
+  html += `<div class="subhead">Faith</div>` + later(['worship'], () => worshipHtml(lat,lng));
+  html += `<div class="subhead">Arts and culture</div>` + later(['artsvenues'], () => artsHtml(lat,lng)) + libraryHtml(lat,lng) + later(['publicart'], () => publicArtHtml(lat,lng));
   html += `<div class="subhead">The block, day to day</div>`;
   if (dsny) html += row('Sanitation district', `${esc(dsny.properties.district)}<span class="meta">Department of Sanitation collection district</span>`, 'dsny');
-  html += `<div id="c311" style="margin-top:10px"><span class="spin"></span> 311 complaints…</div>
-    <div id="food" style="margin-top:12px"><span class="spin"></span> Restaurant grades…</div>
-    <div id="rats" style="margin-top:12px"></div>`;
+  html += `<div id="c311" style="margin-top:10px"${areaAttr('c:250', '311 complaints: within 250 meters')}><span class="spin"></span> 311 complaints…</div>
+    <div id="food" style="margin-top:12px"${areaAttr('c:200', 'Restaurant grades: within 200 meters')}><span class="spin"></span> Restaurant grades…</div>
+    <div id="rats" style="margin-top:12px"${areaAttr('c:200', 'Rat inspections: within 200 meters')}></div>`;
   html += morelinks([
     ['https://www.myschools.nyc/', 'Apply to schools (MySchools)'],
     ['https://new.mta.info/', 'MTA service status'],
@@ -745,8 +1058,7 @@ async function inspect(lat, lng, geoFeature=null){
   /* ----- 7 · landmarks and lore (lazy) ----- */
   html += lazySection(7, 'Landmarks and lore', 'lore', 'sec-lore');
   /* ----- 8 · neighborhood numbers ----- */
-  _demoLat = lat; _demoLng = lng;
-  html += demographicsBlock(nta, boro);
+  html += demographicsBlock(nta, boro, lat, lng);
   /* ----- 9 · crossed indicators ----- */
   html += crossedBlock(nta);
   /* ----- 10 · read more ----- */
@@ -758,22 +1070,11 @@ async function inspect(lat, lng, geoFeature=null){
   $('panel').classList.add('open');
   $('panelbody').scrollTop = 0;
 
-  const featMap = {nta, cd, council:cc, precinct:pp, schooldist:sd, eszones:es, mszones:ms, dsny, congress:cong, assembly:asm, senate:sen, hurricane:hurr, historic:hist, elections:edFeat};
-  document.querySelectorAll('#panelbody .row.hl').forEach(r => {
-    r.addEventListener('mouseenter', () => showShape(featMap[r.dataset.layer]));
-    r.addEventListener('mouseleave', clearShape);
-  });
-  document.querySelectorAll('#panelbody .poi').forEach(li => {
-    li.addEventListener('mouseenter', () => showPoi(+li.dataset.lat, +li.dataset.lng, li.dataset.name));
-    li.addEventListener('mouseleave', clearPoi);
-  });
+  // district rows, nearby-place lists and chapter links are handled by the panel-wide listeners (wirePanel)
+  Object.assign(_feat, {nta, cd, council:cc, precinct:pp, schooldist:sd, eszones:es, mszones:ms, dsny, congress:cong, assembly:asm, senate:sen, hurricane:hurr, historic:hist});
   $('copylink')?.addEventListener('click', e => {
     navigator.clipboard.writeText(location.href).then(()=>{ e.target.textContent='Copied ✓'; setTimeout(()=>e.target.textContent='Copy link',1500); });
   });
-
-  // TOC + snapshot chip jump links
-  document.querySelectorAll('#panelbody .toc a, #panelbody .snapshot .chips a').forEach(a =>
-    a.addEventListener('click', () => document.getElementById(a.dataset.sec)?.scrollIntoView({behavior:'smooth', block:'start'})));
   // bivariate preset map links
   document.querySelectorAll('#panelbody a[data-biv]').forEach(a =>
     a.addEventListener('click', e => { e.preventDefault(); showBivMap(+a.dataset.biv); }));
@@ -783,11 +1084,12 @@ async function inspect(lat, lng, geoFeature=null){
   // snapshot for the compare mode
   const D0 = nta ? DATA.nta_demographics[nta.properties.nta2020] : null;
   ctx.report = {
-    label: props.name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+    label: props.name ? niceAddress(props.name) : `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
     hood: nta ? nta.properties.ntaname : (boro || '—'), boro,
     demo: D0 || {},
-    ed: edFeat ? edFeat.properties : null,
+    ed: null,
   };
+  FILE_P.elections.then(() => { if (!stale(ctx)) ctx.report.ed = layerFeat('elections')?.properties || null; });
   activeCtx = ctx;
   $('comparebtn')?.addEventListener('click', () => {
     if (!comparePin || comparePin.token === ctx.token){
@@ -819,8 +1121,8 @@ async function inspect(lat, lng, geoFeature=null){
       }
     });
   }
-  scroller.onscroll = checkLazy;
-  checkLazy();
+  scroller.onscroll = () => { checkLazy(); updateChapbar(); updateArea(); };
+  checkLazy(); updateChapbar();
   // fallback poll in case scroll events are missed; stops when all sections load
   const poll = setInterval(() => {
     if (stale(ctx) || !document.querySelector('[data-lazy]:not([data-loaded])')) { clearInterval(poll); return; }
@@ -875,12 +1177,12 @@ const BIV_PRESETS = [
   {name:'Rent stabilization × evictions', a:['Rent-stabilized units per 100 renter households', d=>d.renter_occ>100&&d.rs_units!=null?Math.min(100,d.rs_units/d.renter_occ*100):null, v=>v.toFixed(0)], b:['Evictions per 1,000 renter households', d=>d.renter_occ>100&&d.evic_n!=null?d.evic_n/d.renter_occ*1000:null, v=>v.toFixed(1)], note:'Stabilized counts are administrative (mid-2025, via JustFix); where new stabilized buildings outpace survey renter counts the share is capped at 100.'},
   {name:'Poverty × children', a:['Below poverty line', d=>d.poverty_pct, pct], b:['Children under 18', d=>d.under18_pct ?? d.under18_pct_calc, pct], note:'Where both are high, child poverty concentrates.'},
   {name:'Foreign born × limited English', a:['Foreign born', d=>d.foreign_born_pct, pct], b:['Limited English', d=>d.limited_english_pct, pct], note:'High-high areas need language access in city services most.'},
-  {name:'New construction × rent', a:['New building filings per square mile', d=>d.land_sqmi?d.newbuild_n/d.land_sqmi:null, v=>v.toFixed(1)], b:['Median gross rent', d=>d.median_rent, money], note:'Filings are the last 12 months; rent is the 2020-2024 survey.'},
+  {name:'New construction × rent', a:['New buildings filed per square mile', d=>d.land_sqmi?d.newbuild_n/d.land_sqmi:null, v=>v.toFixed(1)], b:['Median gross rent', d=>d.median_rent, money], note:'New-building jobs first filed June 11, 2025 to June 8, 2026, each counted once (later amendments are not counted again); rent is the 2020-2024 survey.'},
   {name:'Seniors × poverty', a:['Seniors (65 and over)', d=>d.age65pl_pct ?? d.senior_pct_calc, pct], b:['Below poverty line', d=>d.poverty_pct, pct], note:'Where both are high, older New Yorkers are aging in place with thin resources.'},
   {name:'Income × education', a:['Median income', d=>d.median_hh_income, money], b:["Bachelor's degree or higher", d=>d.bachelors_plus_pct, pct], note:'Off-diagonal neighborhoods — educated but lower-income or the reverse — are the interesting ones.'},
 ];
 const BIV_COLORS = ['#e8e8e8','#ace4e4','#5ac8c8','#dfb0d6','#a5add3','#5698b9','#be64ac','#8c62aa','#3b4994'];
-const TIERWORD = ['low','mid','high'];
+const TIERTHIRD = ['bottom third','middle third','top third'];
 let _bivCuts = null, bivLayer = null;
 function bivCuts(){
   if (_bivCuts) return _bivCuts;
@@ -904,13 +1206,13 @@ function crossedBlock(nta){
     if (ta==null || tb==null) return;
     const sw = BIV_COLORS[ta*3+tb];
     rows += `<li><span><i style="display:inline-block;width:11px;height:11px;border-radius:3px;background:${sw};border:1px solid #999;margin-right:7px;vertical-align:-1px"></i>${p.name}
-      <span class="sub">${TIERWORD[ta]} (${p.a[2](va)}) · ${TIERWORD[tb]} (${p.b[2](vb)})</span></span>
+      <span class="sub">${esc(p.a[0])}: ${p.a[2](va)} (${TIERTHIRD[ta]})</span><span class="sub">${esc(p.b[0])}: ${p.b[2](vb)} (${TIERTHIRD[tb]})</span></span>
       <span class="n"><a href="#" data-biv="${i}">map →</a></span></li>`;
   });
   if (!rows) return '';
-  return `<section class="blk" id="sec-crossed"><h3><span class="num">9</span> Two factors at once</h3>
+  return `<section class="blk" id="sec-crossed"${areaAttr('layer:nta', `Two factors: the whole of ${nta.properties.ntaname}`)}><h3><span class="num">9</span> Two factors at once</h3>
     <ul class="toplist" style="margin-top:0">${rows}</ul>
-    <div class="note">Each pairing classes this neighborhood low, mid or high on two indicators at once (terciles across all neighborhoods). "Map" paints the whole city by that pairing so you can see where this point sits in the pattern. Crossing two indicators shows correlation, not cause, and the three-way classing hides all the variation within each third.</div></section>`;
+    <div class="note">Each pairing places this neighborhood in the bottom, middle or top third of all neighborhoods on two indicators at once. "Map" paints the whole city by that pairing so you can see where this point sits in the pattern. Crossing two indicators shows correlation, not cause, and the three-way classing hides all the variation within each third.</div></section>`;
 }
 function showBivMap(i){
   clearBivMap();
@@ -923,7 +1225,7 @@ function showBivMap(i){
   }, onEachFeature: (f, l) => {
     const D = DATA.nta_demographics[f.properties.nta2020] || {};
     const va = p.a[1](D), vb = p.b[1](D);
-    if (va!=null && vb!=null) l.bindTooltip(`${f.properties.ntaname}: ${p.a[2](va)} · ${p.b[2](vb)}`, {sticky:true});
+    if (va!=null && vb!=null) l.bindTooltip(`<b>${esc(f.properties.ntaname)}</b><br>${esc(p.a[0])}: ${p.a[2](va)}<br>${esc(p.b[0])}: ${p.b[2](vb)}`, {sticky:true});
     l.on('click', e => inspect(e.latlng.lat, e.latlng.lng));
   }}).addTo(map);
   const cells = [6,7,8,3,4,5,0,1,2].map(k=>`<div style="width:20px;height:20px;background:${BIV_COLORS[k]}"></div>`).join('');
@@ -975,10 +1277,10 @@ function snapshotBlock(lat, lng, nta, boro){
   chip('sec-living','Parks ≤10 min', String(parks.length));
   const market = DATA.supermarkets.map(s=>haversine(lat,lng,s[1],s[2])).sort((a,b)=>a-b)[0];
   if (market != null && market < 4000) chip('sec-living','Supermarket', walkmin(market)+' min');
-  if (DATA.restaurants?.pts){
+  chips.push(later(['restaurants'], () => {
     let rc = 0; for (const p of DATA.restaurants.pts){ if (haversine(lat,lng,p[0],p[1]) <= 800) rc++; }
-    if (rc) chip('sec-living','Restaurants ≤10 min', fmt(rc));
-  }
+    return rc ? `<a data-sec="sec-living"><span>Restaurants ≤10 min</span><b>${fmt(rc)}</b></a>` : '';
+  }, ''));
   // crime rate vs city (NTA-level, 2024-Mar 2026 violent street crime)
   const cr = cityVcrimeRate();
   if (cr && D.vcrime_n != null){
@@ -1115,7 +1417,9 @@ function hospitalHtml(lat,lng){
   const all = DATA.hospitals.map(h => ({name:h[0], lat:h[1], lng:h[2], er:h[3], note:h[4], d:haversine(lat,lng,h[1],h[2])}))
     .sort((a,b)=>a.d-b.d);
   if (!all.length) return '';
-  const picks = all.slice(0,3);
+  // outpatient-only sites (ambulatory care, outpatient surgery and cancer centers) are licensed
+  // as hospital campuses but are not where anyone goes for a hospital; keep them off the list
+  const picks = all.filter(h => !/^(ambulatory|outpatient)/i.test(h.note)).slice(0,3);
   const nearestEr = all.find(h => h.er);
   if (nearestEr && !picks.includes(nearestEr)) picks.push(nearestEr);
   const miles = m => m < 1100 ? walkmin(m) + ' min walk' : (m/1609.34).toFixed(1) + ' mi';
@@ -1124,7 +1428,7 @@ function hospitalHtml(lat,lng){
     <span class="n">${miles(h.d)}</span></li>`;
   return `<div class="row"><span class="k">Nearest hospitals</span><span class="v"></span></div>
     <ul class="toplist">` + picks.map(li).join('') + `</ul>
-    <div class="note" style="margin:0 0 4px">All licensed hospital campuses and freestanding emergency departments in the state health department's facility file, straight-line distances. Emergency-room status is hand-checked and can change as departments open and close — verify before relying on it. In an emergency call 911, which routes to the right place.</div>`;
+    <div class="note" style="margin:0 0 4px">Licensed hospital campuses and freestanding emergency departments from the state health department's facility file, straight-line distances; outpatient-only sites are left out. Emergency-room status is hand-checked and can change as departments open and close — verify before relying on it. In an emergency call 911, which routes to the right place.</div>`;
 }
 function collegeHtml(lat,lng){
   const near = DATA.colleges.map(c => ({name:c[0], lat:c[1], lng:c[2], total:c[3], control:c[4], url:c[5], d:haversine(lat,lng,c[1],c[2])}))
@@ -1221,10 +1525,12 @@ async function fetchFlood(ctx){
 
 /* 45-minute transit reach, embedding the 45-minute-city engine (subway mode) */
 let reach45Layer = null;
-function show45Reach(ctx){
+async function show45Reach(ctx){
   const {lat,lng} = ctx;
   if (reach45Layer){ map.removeLayer(reach45Layer); reach45Layer = null; }
+  await FILE_P.transit45.catch(()=>{});
   const T = DATA.transit45;
+  if (!T || stale(ctx)) return;
   const WAIT = T.wait || 180, TRANSFER = 180, MAX = 2700, WALK = 80/60; // m per second
   const graph = {};
   T.stations.forEach(s => graph[s.id] = []);
@@ -1269,7 +1575,7 @@ function show45Reach(ctx){
     circles.push(L.circle([s.lat,s.lng], {radius: Math.max(120,(MAX-t)*WALK), ...R45STYLE}));
   }
   reach45Layer = L.layerGroup(circles).addTo(map);
-  map.fitBounds(L.featureGroup(circles).getBounds(), {padding:[20,20]});
+  fitVisible(L.featureGroup(circles).getBounds(), false);
   if ($('reach45stat')) $('reach45stat').innerHTML =
     `<div class="note" style="margin:4px 0 6px"><b>${fmt(reached)} of ${T.stations.length} subway stations</b> reachable within 45 minutes from this point (walk + wait + ride + transfers, subway only — the engine behind the 45-minute city map). <span id="reach45clear" style="text-decoration:underline;cursor:pointer">Clear</span></div>`;
   $('reach45clear')?.addEventListener('click', () => { if(reach45Layer){map.removeLayer(reach45Layer); reach45Layer=null;} $('reach45stat').innerHTML=''; });
@@ -1380,14 +1686,20 @@ function publicArtHtml(lat,lng){
     <div class="note" style="margin:0 0 6px">Permanent works from the parks monuments catalog and the Percent for Art program — a subset of the <a href="https://joshgreenman1973.github.io/experiments/nyc-public-art-map/" target="_blank" rel="noopener">full public art map</a>, which also covers transit art and temporary installations.</div>`;
 }
 function worshipHtml(lat,lng){
-  const near = DATA.worship.map(w => ({name:w[0], denom:w[1], lat:w[2], lng:w[3], d:haversine(lat,lng,w[2],w[3])}))
-    .sort((a,b)=>a.d-b.d).slice(0,4).filter(w=>w.d<2500);
+  const all = DATA.worship.map(w => ({name:w[0], denom:w[1], lat:w[2], lng:w[3], d:haversine(lat,lng,w[2],w[3])}))
+    .sort((a,b)=>a.d-b.d);
+  const seen = {}, near = [];
+  for (const w of all){
+    if (w.d >= 2500 || near.length >= 4) break;
+    if ((seen[w.denom]||0) >= 2) continue;   // variety over four "Christian — unspecified" in a row
+    seen[w.denom] = (seen[w.denom]||0) + 1; near.push(w);
+  }
   if (!near.length) return `<div class="note" style="margin:0 0 6px">No house of worship in the database within about a 30 minute walk.</div>`;
   return `<ul class="toplist">` + near.map(w =>
     `<li class="poi" data-lat="${w.lat}" data-lng="${w.lng}" data-name="${esc(w.name)}">
       <span>${esc(w.name)}<span class="sub">${esc(w.denom)}</span></span>
       <span class="n">${walkmin(w.d)} min</span></li>`).join('') + `</ul>
-    <div class="note" style="margin:0 0 6px">Nearest houses of worship from the religion map's database of 2,847 congregations — coverage is broad but not complete, and congregations move.</div>`;
+    <div class="note" style="margin:0 0 6px">Nearest houses of worship from the religion map's database of 2,847 congregations, at most two of any one denomination so the list shows the range nearby. Coverage is broad but not complete, and congregations move.</div>`;
 }
 function busHtml(lat,lng){
   const near = DATA.busstops.map(s => ({name:s[0],routes:s[1],lat:s[2],lng:s[3],d:haversine(lat,lng,s[2],s[3])}))
@@ -1448,7 +1760,7 @@ async function fetchLot(ctx){
     if (d.assesstot) h += row('Assessed value', money(d.assesstot));
     if (d.ownername) h += row('Owner of record', esc(d.ownername));
     if (d.landmark) h += row('Landmark', esc(d.landmark));
-    h += `<div id="hpd"></div><div id="sales" style="margin-top:6px"></div><div id="housing" style="margin-top:6px"></div>`;
+    h += `<div id="hpd"></div><div id="sales" style="margin-top:6px"></div><div id="housing" style="margin-top:6px"${areaAttr('box:0.0045:0.0059', 'Evictions and affordable housing: a box about 500 meters each way')}></div>`;
     const b = String(parseInt(bbl,10)), boroId = b[0], block = parseInt(b.slice(1,6),10), lot = parseInt(b.slice(6),10);
     h += morelinks([
       [`https://zola.planning.nyc.gov/l/lot/${boroId}/${block}/${lot}`, 'Full zoning on ZoLa'],
@@ -1485,7 +1797,7 @@ async function fetchSales(ctx, boroId, block){
     const ar = askingRent(ctx.nta);
     if (ar) h += row('Median asking rent', `${money(ar.rent)}<span class="meta">${esc(ar.area)}, ${esc(ar.month)} (StreetEasy listings). Asking rent is what vacant units list for — most tenants, especially in stabilized units, pay less than this.</span>`);
     h += row('Property sales within ~5 blocks, last 12 months', `${fmt(rows.length)}<span class="meta">median ${money(median)} (all property types mixed)</span>`);
-    h += `<ul class="toplist">`+rows.slice(0,3).map(r=>`<li><span>${esc(titleWords(r.address))}<span class="sub">${esc((r.building_class_category||'').replace(/^\d+\s*/,'').toLowerCase())}</span></span><span class="n">${money(r.sale_price)}<span class="sub" style="text-align:right">${monthYear(r.sale_date)}</span></span></li>`).join('')+`</ul>`;
+    h += `<ul class="toplist">`+rows.slice(0,3).map(r=>`<li><span>${esc(niceAddress(titleWords(r.address)))}<span class="sub">${esc((r.building_class_category||'').replace(/^\d+\s*/,'').toLowerCase())}</span></span><span class="n">${money(r.sale_price)}<span class="sub" style="text-align:right">${monthYear(r.sale_date)}</span></span></li>`).join('')+`</ul>`;
     h += `<div class="note">Department of Finance rolling sales, deed transfers under $10,000 excluded. "Blocks" are tax blocks adjacent in number, which usually but not always means nearby.</div>`;
     $('sales').innerHTML = h;
   }catch(e){ if(!stale(ctx)&&$('sales')) $('sales').innerHTML=''; }
@@ -1510,11 +1822,13 @@ async function fetchHousing(ctx){
   }
   if (ah && ah.length){
     const units = ah.reduce((s,x)=>s+ +(+x.units||0),0);
-    h += row('City-financed affordable housing nearby, last 5 years', `${fmt(units)} units<span class="meta">largest: ${esc(titleWords(ah[0].project_name||''))}</span>`);
+    h += row('City-financed affordable housing nearby, last 5 years', `${fmt(units)} units<span class="meta">largest: ${esc(projectName(ah[0].project_name))}</span>`);
   }
   if (ev || (ah && ah.length)) h += `<div class="note" style="margin:0">Evictions counted are marshal-executed only — the end of the process; filings, which are far more numerous, are not in this feed. Affordable-housing units are city-financed projects only.</div>`;
   $('housing').innerHTML = h;
 }
+/* housing-production project names end in program and fiscal-year codes ("BREMOND KING DAVIS.YR15.FY26") */
+function projectName(s){ return niceAddress(titleWords(String(s||'').replace(/(\.[A-Za-z0-9]{2,5})*\.fy\d{2,4}$/i, '').trim())); }
 async function fetchHpd(ctx, boroId, block, lot, unitsres){
   if (!unitsres) return;
   try{
@@ -1543,7 +1857,7 @@ async function fetchLiving(ctx){
     let h = `<div class="row"><span class="k">311 complaints, last 90 days within 250 meters</span><span class="v bignum">${fmt(total)}</span></div>
       <div class="row"><span class="k">Of which noise</span><span class="v">${fmt(noise)}${total?`<span class="meta">${Math.round(noise/total*100)}% of all complaints here · citywide, noise is about a fifth of all 311</span>`:''}</span></div>
       <div class="note" style="margin:0 0 6px" id="c311cmp"><span class="spin"></span> comparing to the citywide average…</div>`;
-    if (rows.length) h += `<ul class="toplist">`+rows.slice(0,5).map(x=>`<li><span>${esc(x.complaint_type)}</span><span class="n">${fmt(x.n)}</span></li>`).join('')+`</ul>`;
+    if (rows.length) h += `<ul class="toplist">`+rows.slice(0,5).map(x=>`<li><span>${esc(unshout(x.complaint_type))}</span><span class="n">${fmt(x.n)}</span></li>`).join('')+`</ul>`;
     $('c311').innerHTML = h;
     city311Total(since311).then(cityTotal => {
       if (stale(ctx)||!$('c311cmp')) return;
@@ -1602,10 +1916,6 @@ async function fetchLiving(ctx){
     $('bike').innerHTML = `<ul class="toplist">`+near.map(s=>`<li class="poi" data-lat="${s.lat}" data-lng="${s.lng}" data-name="${esc(s.name)}">
       <span>Citi Bike: ${esc(s.name)}<span class="sub">${s.bikes} bikes (${s.ebikes} electric) · ${s.docks} docks open right now</span></span>
       <span class="n">${walkmin(s.d)} min</span></li>`).join('')+`</ul>`;
-    $('bike').querySelectorAll('.poi').forEach(li => {
-      li.addEventListener('mouseenter', () => showPoi(+li.dataset.lat, +li.dataset.lng, li.dataset.name));
-      li.addEventListener('mouseleave', clearPoi);
-    });
   });
 }
 
@@ -1661,15 +1971,9 @@ async function fetchSafety(ctx){
   const el = $('body-safety'); if (!el) return;
   const {lat,lng} = ctx;
   const n0 = ctx.precinct;
-  el.innerHTML = (n0 ? `<div class="row hl" id="pctrow"><span class="k">Police precinct</span><span class="v"><a href="${precinctUrl(n0)}" target="_blank" rel="noopener">${n0===22?'Central Park Precinct':ordinal(n0)+' Precinct'}</a></span></div>` : '')
+  el.innerHTML = (n0 ? `<div class="row hl" id="pctrow" data-layer="precinct"><span class="k">Police precinct</span><span class="v"><a href="${precinctUrl(n0)}" target="_blank" rel="noopener">${n0===22?'Central Park Precinct':ordinal(n0)+' Precinct'}</a></span></div>` : '')
     + `<div id="crime" style="margin-top:6px"><span class="spin"></span> Crime data…</div>
     <div id="safetylinks"></div>`;
-  if (n0) {
-    const pctFeat = lookup(LAYERS.precinct, lat, lng);
-    const pr = $('pctrow');
-    pr.addEventListener('mouseenter', () => showShape(pctFeat));
-    pr.addEventListener('mouseleave', clearShape);
-  }
   fetchCrime(ctx).catch(()=>{ if(!stale(ctx)&&$('crime')) $('crime').innerHTML='<span class="errnote">Crime feed unavailable right now.</span>'; });
   const n = ctx.precinct;
   $('safetylinks').innerHTML = morelinks([
@@ -1803,9 +2107,9 @@ async function fetchCrime(ctx){
   // expected count for an average NYC area this size, same window
   const expected = base.cityTotal * circleSqMi(RADIUS) / CITY_LAND_SQMI;
   const mult = expected > 0 ? total/expected : null;
-  // top offenses (merge law categories per offense)
+  // top offenses in plain words (merging law categories, and police labels that mean the same thing)
   const byOfns = {};
-  rows.forEach(x => byOfns[x.ofns_desc] = (byOfns[x.ofns_desc]||0) + +x.n);
+  rows.forEach(x => { const k = offenseName(x.ofns_desc); byOfns[k] = (byOfns[k]||0) + +x.n; });
   const top = Object.entries(byOfns).sort((a,b)=>b[1]-a[1]).slice(0,5);
   // precinct rank
   const myPct = ctx.precinct;
@@ -1837,27 +2141,29 @@ async function fetchCrime(ctx){
     const area = base.areas?.[ctx.precinct];
     const myRate = area ? ytd.current_year/area : null;
     const cityRate = cs?.citywide ? cs.citywide.total_seven_major.year_to_date.current_year/CITY_LAND_SQMI : null;
-    h += `<div class="row"><span class="k">Major felonies in the ${esc(pctKey)}, year to date through ${esc(csp.report_period?.week_end||'')}</span><span class="v bignum">${fmt(ytd.current_year)}</span></div>`;
+    h += `<div${areaAttr('layer:precinct', `CompStat: the whole ${pctKey}`)}><div class="row"><span class="k">Major felonies in the ${esc(pctKey)}, year to date through ${esc(csDate(csp.report_period?.week_end))}</span><span class="v bignum">${fmt(ytd.current_year)}</span></div>`;
     if (myRate && cityRate) h += `<div class="note" style="margin:0 0 4px">${(myRate/cityRate).toFixed(1)}× the citywide rate per square mile (${fmt(Math.round(myRate))} here vs. ${fmt(Math.round(cityRate))} citywide).</div>`;
+    h += `</div>`;
   }
-  h += `<div class="row"><span class="k">Crime complaints of every kind within 500 meters, ${fmtWindow(base.start, base.end)}</span><span class="v bignum">${fmt(total)}</span></div>
+  h += `<div${areaAttr('c:500', 'Crime complaints: within 500 meters')}><div class="row"><span class="k">Crime complaints of every kind within 500 meters, ${fmtWindow(base.start, base.end)}</span><span class="v bignum">${fmt(total)}</span></div>
     <div class="statpair">
       <div class="g"><b>${mult!=null ? mult.toFixed(1)+'×' : '—'}</b><span>the citywide average by area (${pc(expected)})</span></div>
       <div class="g"><b>${perRes ? perRes.mult.toFixed(1)+'×' : '—'}</b><span>${perRes ? `the citywide rate by residents (≈${fmt(perRes.residents)} live here)` : 'per-resident rate not computed: no residential population counted here'}</span></div>
       <div class="g"><b>${rank?`${rank} of ${base.pctRates.length}`:'—'}</b><span>precinct rank, complaints per square mile (1 = most)</span></div>
     </div>
     <div class="row"><span class="k">How serious were they?</span><span class="v">${fmt(fel)} felonies · ${fmt(mis)} misdemeanors<span class="meta">plus ${fmt(total-fel-mis)} violations (the least serious tier, like open container). Felonies are the most serious; the ${fmt(total)} above counts all three.</span></span></div>`;
-  if (top.length) h += `<ul class="toplist">`+top.map(([k,n])=>`<li><span>${titleCaseOfns(k)}</span><span class="n">${fmt(n)}</span></li>`).join('')+`</ul>`;
+  if (top.length) h += `<ul class="toplist">`+top.map(([k,n])=>`<li><span>${esc(k)}</span><span class="n">${fmt(n)}</span></li>`).join('')+`</ul>`;
+  h += `</div>`;
   if (crash && crash[0]){
     const d = crash[0];
     const crashMult = cityCrash ? (+d.n)/(cityCrash*circleSqMi(250)/CITY_LAND_SQMI) : null;
     const crashLag = feedLagNote(crashMax);
-    h += `<div class="row" style="margin-top:8px"><span class="k">Traffic crashes within 250 meters, last 12 months</span><span class="v bignum">${fmt(d.n)}</span></div>
+    h += `<div${areaAttr('c:250', 'Traffic crashes: within 250 meters')}><div class="row" style="margin-top:8px"><span class="k">Traffic crashes within 250 meters, last 12 months</span><span class="v bignum">${fmt(d.n)}</span></div>
       <div class="statpair">
         <div class="g"><b>${crashMult!=null?crashMult.toFixed(1)+'×':'—'}</b><span>the citywide average by area</span></div>
         <div class="g"><b>${fmt(d.inj)}</b><span>people injured</span></div>
         <div class="g" style="${+d.killed?'border-color:#b3382c':''}"><b style="${+d.killed?'color:#b3382c':''}">${fmt(d.killed)}</b><span>killed</span></div>
-      </div>${crashLag?`<div class="note" style="margin:2px 0 0">${esc(crashLag.trim())}</div>`:''}`;
+      </div>${crashLag?`<div class="note" style="margin:2px 0 0">${esc(crashLag.trim())}</div>`:''}</div>`;
   }
   h += `<div class="note">${perRes ? PER_RESIDENT_CAVEAT + ' ' : ''}Complaint counts also reflect foot traffic and reporting behavior, and locations of sex crimes and some other offenses are withheld. Context, not a safety score.</div>`;
 
@@ -1865,7 +2171,7 @@ async function fetchCrime(ctx){
   h += `<div class="subhead" style="margin-top:16px">Which way it's heading</div>`;
   if (csp){
     const t = csp.total_seven_major, ytd = t.year_to_date, m28 = t.twenty_eight_day, hist = t.historical||{};
-    h += `<div class="statpair">
+    h += `<div${areaAttr('layer:precinct', `CompStat trends: the whole ${pctKey}`)}><div class="statpair">
       <div class="g"><b style="${pctColor(ytd.pct_change)}">${signedPct(ytd.pct_change)}</b><span>major felonies vs. last year to date (${fmt(ytd.prior_year)})</span></div>
       <div class="g"><b style="${pctColor(m28.pct_change)}">${signedPct(m28.pct_change)}</b><span>last 28 days vs. a year earlier</span></div>
       <div class="g"><b style="${pctColor(hist['31_yr_pct'])}">${signedPct(hist['31_yr_pct'])}</b><span>vs. 31 years ago (1990s baseline)</span></div>
@@ -1875,26 +2181,57 @@ async function fetchCrime(ctx){
       if (!c) return '';
       return `<li><span>${label}</span><span class="n">${fmt(c.current_year)} <span style="font-weight:400;${pctColor(c.pct_change)}">${signedPct(c.pct_change)}</span></span></li>`;
     }).join('')+`</ul>
-    <div class="note" style="margin:4px 0 8px">Precinct-wide weekly CompStat counts with change vs. the same dates last year; percent swings on small counts mean little.</div>`;
+    <div class="note" style="margin:4px 0 8px">Precinct-wide weekly CompStat counts with change vs. the same dates last year; percent swings on small counts mean little.</div></div>`;
   }
-  h += `<div class="row"><span class="k">Complaints near this point vs. the same dates last year</span><span class="v" style="font-weight:700;${delta!=null&&delta>0?'color:#b3382c':delta!=null&&delta<0?'color:#1f7a4d':''}">${delta==null?'—':(delta>0?'+':'')+delta.toFixed(0)+'%'}<span class="meta">${fmt(prev)} then · ${fmt(total)} now</span></span></div>`;
-  h += spark;
+  h += `<div${areaAttr('c:500', 'Crime complaints: within 500 meters')}><div class="row"><span class="k">Complaints near this point vs. the same dates last year</span><span class="v" style="font-weight:700;${delta!=null&&delta>0?'color:#b3382c':delta!=null&&delta<0?'color:#1f7a4d':''}">${delta==null?'—':(delta>0?'+':'')+delta.toFixed(0)+'%'}<span class="meta">${fmt(prev)} then · ${fmt(total)} now</span></span></div>`;
+  h += spark + `</div>`;
   h += `<div class="note">Counted by report date; the police department posts the complaint file quarterly, so its window is the latest covered. CompStat is precinct-wide and weekly; the complaint circle is hyper-local and quarterly.</div>`;
   $('crime').innerHTML = h;
 }
-function titleCaseOfns(s){
-  if (!s) return '—';
-  return esc(s.toLowerCase().replace(/(^|\s|\/)\w/g,c=>c.toUpperCase()).replace(/ & Related Of(fenses)?$/i,''));
+/* The police department's offense labels are truncated capitals ("OFF. AGNST PUB ORD SENSBLTY &",
+   "HARRASSMENT 2"). Plain names for the ones that show up; anything else is title-cased. */
+const OFFENSE_NAMES = {
+  'PETIT LARCENY':'Petty theft (petit larceny)', 'HARRASSMENT 2':'Harassment', 'ASSAULT 3 & RELATED OFFENSES':'Misdemeanor assault',
+  'GRAND LARCENY':'Grand larceny', 'FELONY ASSAULT':'Felony assault', 'VEHICLE AND TRAFFIC LAWS':'Traffic law offenses',
+  'MISCELLANEOUS PENAL LAW':'Other penal law offenses', 'CRIMINAL MISCHIEF & RELATED OF':'Criminal mischief (property damage)',
+  'OFF. AGNST PUB ORD SENSBLTY &':'Offenses against public order', 'OTHER OFFENSES RELATED TO THEFT':'Other theft offenses',
+  'ROBBERY':'Robbery', 'GRAND LARCENY OF MOTOR VEHICLE':'Car theft', 'PETIT LARCENY OF MOTOR VEHICLE':'Car theft (petit larceny)',
+  'BURGLARY':'Burglary', 'OFFENSES AGAINST PUBLIC ADMINI':'Offenses against public administration', 'DANGEROUS DRUGS':'Drug offenses',
+  'SEX CRIMES':'Sex crimes', 'FORGERY':'Forgery', 'DANGEROUS WEAPONS':'Weapons offenses', 'CRIMINAL TRESPASS':'Criminal trespass',
+  'OTHER STATE LAWS':'Other state law offenses', 'OTHER STATE LAWS (NON PENAL LAW)':'Other state law offenses',
+  'ADMINISTRATIVE CODE':'City administrative code', 'INTOXICATED & IMPAIRED DRIVING':'Drunk or impaired driving',
+  'INTOXICATED/IMPAIRED DRIVING':'Drunk or impaired driving', 'FRAUDS':'Fraud', 'THEFT-FRAUD':'Theft by fraud',
+  'OFFENSES INVOLVING FRAUD':'Fraud', 'RAPE':'Rape', 'OFFENSES AGAINST THE PERSON':'Other offenses against a person',
+  'POSSESSION OF STOLEN PROPERTY':'Possession of stolen property', 'UNAUTHORIZED USE OF A VEHICLE':'Unauthorized use of a vehicle',
+  'PROSTITUTION & RELATED OFFENSES':'Prostitution offenses', "BURGLAR'S TOOLS":"Possession of burglar's tools", 'ARSON':'Arson',
+  'GAMBLING':'Gambling', 'OFFENSES AGAINST PUBLIC SAFETY':'Offenses against public safety',
+  'MURDER & NON-NEGL. MANSLAUGHTER':'Murder and manslaughter', 'KIDNAPPING & RELATED OFFENSES':'Kidnapping',
+  'CANNABIS RELATED OFFENSES':'Cannabis offenses', 'CHILD ABANDONMENT/NON SUPPORT 1':'Child abandonment or nonsupport',
+  'DISORDERLY CONDUCT':'Disorderly conduct', 'ALCOHOLIC BEVERAGE CONTROL LAW':'Alcohol control law',
+  'FRAUDULENT ACCOSTING':'Fraudulent accosting', 'ANTICIPATORY OFFENSES':'Anticipatory offenses',
+  'OFFENSES RELATED TO CHILDREN':'Offenses related to children', 'ESCAPE 3':'Escape',
+  'HOMICIDE-NEGLIGENT,UNCLASSIFIE':'Negligent homicide', 'HOMICIDE-NEGLIGENT-VEHICLE':'Negligent homicide (vehicle)',
+  'JOSTLING':'Jostling', 'NEW YORK CITY HEALTH CODE':'City health code', 'UNLAWFUL POSS. WEAP. ON SCHOOL':'Weapon on school grounds',
+  'LOITERING/GAMBLING (CARDS, DIC':'Loitering for gambling', 'OTHER TRAFFIC INFRACTION':'Other traffic infraction',
+};
+function offenseName(s){
+  if (!s) return 'Unlabeled';
+  return OFFENSE_NAMES[s] || s.toLowerCase().replace(/^\w/, c => c.toUpperCase()).replace(/ & related of(fenses)?$/i, '');
+}
+/* the CompStat feed dates weeks as M/D/YYYY */
+function csDate(s){
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s || '');
+  return m ? new Date(+m[3], +m[1]-1, +m[2]).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : (s || '');
 }
 
 /* ---------- 7 · new and changing ---------- */
 async function fetchChanging(ctx){
   const el = $('body-changing'); if (!el) return;
   const {lat,lng,nta,zip} = ctx;
-  el.innerHTML = `<div id="newfood"><span class="spin"></span> New restaurants…</div>
-    <div id="building" style="margin-top:12px"><span class="spin"></span> Construction and demolition…</div>
-    <div id="newbiz" style="margin-top:12px"><span class="spin"></span> Newly licensed businesses…</div>
-    <div id="film" style="margin-top:12px"><span class="spin"></span> Film shoots…</div>`;
+  el.innerHTML = `<div id="newfood"${areaAttr('c:500', 'New restaurants: within 500 meters')}><span class="spin"></span> New restaurants…</div>
+    <div id="building" style="margin-top:12px"${nta ? areaAttr('layer:nta', `Building filings: the whole of ${nta.properties.ntaname}`) : ''}><span class="spin"></span> Construction and demolition…</div>
+    <div id="newbiz" style="margin-top:12px"${areaAttr('box:0.0036:0.0047', 'New business licenses: a box about 400 meters each way')}><span class="spin"></span> Newly licensed businesses…</div>
+    <div id="film" style="margin-top:12px"${zip ? areaAttr('zip', `Film shoots: ZIP ${zip} (census approximation of the ZIP code)`) : ''}><span class="spin"></span> Film shoots…</div>`;
   // new restaurants: first-ever inspection in the last 9 months
   soda('43nn-pn8j',{'$select':'camis,dba,min(inspection_date) as first_seen',
     '$where':`within_circle(location, ${lat}, ${lng}, 500)`,'$group':'camis,dba',
@@ -1906,39 +2243,56 @@ async function fetchChanging(ctx){
     h += `<div class="note">"New" means first-ever health inspection in the last nine months — a good proxy for openings.</div>`;
     $('newfood').innerHTML = h;
   }).catch(()=>{ if(!stale(ctx)&&$('newfood')) $('newfood').innerHTML='<span class="errnote">Inspection feed unavailable right now.</span>'; });
-  // construction: DOB NOW filings in this neighborhood
+  // construction: DOB NOW jobs in this neighborhood. Every job has one initial filing (its
+  // number ends "-I1") and then rows for each later amendment and work type (-P1, -S1 …),
+  // so counting rows counts paperwork; counting -I1 rows counts jobs.
   if (nta){
     const name = nta.properties.ntaname.replace(/'/g,"''");
-    soda('w9ak-ipjd',{'$select':'job_type,filing_date,house_no,street_name,job_description',
-      '$where':`nta='${name}' AND filing_date > '${daysAgoISO(365)}' AND job_type in('New Building','Full Demolition')`,
-      '$order':'filing_date DESC','$limit':40})
-    .then(rows => {
+    const where = `nta='${name}' AND filing_date > '${daysAgoISO(365)}' AND job_type in('New Building','Full Demolition') AND job_filing_number like '%-I1'`;
+    Promise.all([
+      soda('w9ak-ipjd',{'$select':'job_type,count(*) as n','$where':where,'$group':'job_type'}),
+      soda('w9ak-ipjd',{'$select':'job_type,filing_date,house_no,street_name','$where':where,'$order':'filing_date DESC','$limit':12}),
+    ]).then(([counts, rows]) => {
       if (stale(ctx)||!$('building')) return;
-      const nb = rows.filter(r=>r.job_type==='New Building'), dm = rows.filter(r=>r.job_type==='Full Demolition');
+      const n = t => +(counts.find(c => c.job_type === t)?.n || 0);
       let h = `<div class="row"><span class="k">Filed in ${esc(nta.properties.ntaname)}, last 12 months</span><span class="v"></span></div>
         <div class="statpair">
-          <div class="g"><b>${nb.length}</b><span>new building filings</span></div>
-          <div class="g"><b>${dm.length}</b><span>demolition filings</span></div>
+          <div class="g"><b>${fmt(n('New Building'))}</b><span>new building${n('New Building')===1?'':'s'}</span></div>
+          <div class="g"><b>${fmt(n('Full Demolition'))}</b><span>full demolition${n('Full Demolition')===1?'':'s'}</span></div>
         </div>`;
-      const show = rows.slice(0,4);
-      if (show.length) h += `<ul class="toplist">`+show.map(x=>`<li><span>${esc(titleWords((x.house_no||'')+' '+(x.street_name||'')))}<span class="sub">${x.job_type==='New Building'?'new building':'demolition'} · filed ${monthYear(x.filing_date)}</span></span></li>`).join('')+`</ul>`;
-      h += `<div class="note">Department of Buildings DOB NOW job filings (neighborhood-wide, not radius).</div>`;
+      const seen = new Set(), show = [];
+      for (const x of rows){
+        const addr = niceAddress(titleWords(`${x.house_no||''} ${x.street_name||''}`.trim()));
+        if (seen.has(addr)) continue;
+        seen.add(addr); show.push({...x, addr});
+        if (show.length >= 4) break;
+      }
+      if (show.length) h += `<ul class="toplist">`+show.map(x=>`<li><span>${esc(x.addr)}<span class="sub">${x.job_type==='New Building'?'new building':'demolition'} · filed ${monthYear(x.filing_date)}</span></span></li>`).join('')+`</ul>`;
+      h += `<div class="note">Department of Buildings (DOB NOW) jobs first filed in the last 12 months, each counted once; later amendments to the same job are not counted again. Neighborhood-wide, not a radius. A filing is a plan, not a finished building.</div>`;
       $('building').innerHTML = h;
     }).catch(()=>{ if(!stale(ctx)&&$('building')) $('building').innerHTML='<span class="errnote">Buildings feed unavailable right now.</span>'; });
   } else $('building').innerHTML = '';
   // newly licensed businesses (bbox ≈ 400 m)
-  const dy = 0.0036, dx = 0.0047;
+  const dy = 0.0036, dx = 0.0047, LIC_LIMIT = 40;
   Promise.all([
     soda('w7w3-xahh',{'$select':'business_name,dba_trade_name,business_category,license_creation_date',
       '$where':`latitude::number between ${lat-dy} and ${lat+dy} AND longitude::number between ${lng-dx} and ${lng+dx} AND license_creation_date > '${daysAgoISO(365)}' AND license_status='Active'`,
-      '$order':'license_creation_date DESC','$limit':6}),
+      '$order':'license_creation_date DESC','$limit':LIC_LIMIT}),
     feedMax('w7w3-xahh','license_creation_date'),
   ]).then(([rows, mx]) => {
     if (stale(ctx)||!$('newbiz')) return;
     const lag = feedLagNote(mx);
     if (!rows.length){ $('newbiz').innerHTML = row('Newly licensed businesses nearby',`None in the last year<span class="meta">covers trades the city licenses, not every storefront${esc(lag)}</span>`); return; }
-    let h = `<div class="row"><span class="k">Newly licensed businesses within ~400 meters, last 12 months</span><span class="v bignum">${rows.length}${rows.length===6?'+':''}</span></div>
-      <ul class="toplist">`+rows.map(x=>`<li><span>${esc(titleWords(x.dba_trade_name||x.business_name))}<span class="sub">${esc(x.business_category||'')}</span></span><span class="n">${monthYear(x.license_creation_date)}</span></li>`).join('')+`</ul>
+    // one business often holds several licenses (tobacco and e-cigarettes, say); list it once
+    const key = s => String(s||'').toLowerCase().replace(/\b(inc|llc|corp|co|ltd|corporation)\b\.?/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+    const biz = [], byKey = {};
+    rows.forEach(x => {
+      const nm = x.dba_trade_name || x.business_name, k = key(nm);
+      if (!byKey[k]){ byKey[k] = {name:nm, cats:[], date:x.license_creation_date}; biz.push(byKey[k]); }
+      if (x.business_category && !byKey[k].cats.includes(x.business_category)) byKey[k].cats.push(x.business_category);
+    });
+    let h = `<div class="row"><span class="k">Newly licensed businesses within ~400 meters, last 12 months</span><span class="v bignum">${biz.length}${rows.length===LIC_LIMIT?'+':''}</span></div>
+      <ul class="toplist">`+biz.slice(0,6).map(x=>`<li><span>${esc(titleWords(x.name))}<span class="sub">${esc(x.cats.join(' · '))}</span></span><span class="n">${monthYear(x.date)}</span></li>`).join('')+`</ul>
       <div class="note">Department of Consumer and Worker Protection licenses — covers licensed trades only, not every new storefront.${esc(lag)}</div>`;
     $('newbiz').innerHTML = h;
   }).catch(()=>{ if(!stale(ctx)&&$('newbiz')) $('newbiz').innerHTML='<span class="errnote">License feed unavailable right now.</span>'; });
@@ -1956,7 +2310,9 @@ async function fetchChanging(ctx){
       let h = `<div class="row"><span class="k">Film and TV shoots permitted in ZIP ${esc(zip)}, last six months</span><span class="v bignum">${rows.length}${rows.length===5?'+':''}</span></div>
         <ul class="toplist">`+rows.map(x=>{
           const street = (x.parkingheld||'').split(',')[0].toLowerCase().replace(/\s+/g,' ').trim();
-          return `<li><span>${esc(x.category||'Production')}${x.subcategoryname && x.subcategoryname!=='Not Applicable'?' · '+esc(x.subcategoryname):''}<span class="sub">${esc(titleWords(street))}</span></span><span class="n">${monthYear(x.startdatetime)}</span></li>`;
+          const cat = unshout(x.category || 'Production');
+          const sub = x.subcategoryname && x.subcategoryname !== 'Not Applicable' && x.subcategoryname.toLowerCase() !== cat.toLowerCase() ? ' · ' + x.subcategoryname : '';
+          return `<li><span>${esc(cat + sub)}<span class="sub">${esc(niceAddress(titleWords(street)))}</span></span><span class="n">${monthYear(x.startdatetime)}</span></li>`;
         }).join('')+`</ul>
         <div class="note">Mayor's Office of Media and Entertainment permits; the city updates this dataset irregularly.${esc(lag)}</div>`;
       $('film').innerHTML = h;
@@ -1986,6 +2342,8 @@ function feedLagNote(iso, maxDays){
 async function fetchLore(ctx){
   const el = $('body-lore'); if (!el) return;
   const {lat,lng} = ctx;
+  await Promise.all([FILE_P.landmarks, FILE_P.neighborhoods_project]).catch(()=>{});
+  if (stale(ctx) || !$('body-lore') || !DATA.landmarks) return;
   // nearest landmarks (static)
   const near = DATA.landmarks.map(l => ({name:l[0],lat:l[1],lng:l[2],year:l[3],url:l[4],arch:l[5]||'',d:haversine(lat,lng,l[1],l[2])}))
     .sort((a,b)=>a.d-b.d).slice(0,4).filter(l=>l.d<2500);
@@ -1995,7 +2353,7 @@ async function fetchLore(ctx){
       <span>${l.url?`<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)}</a>`:esc(l.name)}<span class="sub">designated ${esc(l.year)||'—'}${l.arch?' · '+esc(l.arch):''}</span></span>
       <span class="n">${walkmin(l.d)} min</span></li>`).join('')+`</ul>`;
   } else h += `<div class="note" style="margin:0 0 6px">No designated individual landmark within about a 30 minute walk.</div>`;
-  h += `<div class="subhead">Nearby on Wikipedia</div><div id="wiki"><span class="spin"></span></div>`;
+  h += `<div${areaAttr('c:800', 'Wikipedia articles: within 800 meters')}><div class="subhead">Nearby on Wikipedia</div><div id="wiki"><span class="spin"></span></div></div>`;
   const np = neighborhoodsProjectLink(ctx.nta);
   h += morelinks([
     np && [np.url, `${np.name} in The Neighborhoods (Rob Stephenson)`],
@@ -2006,10 +2364,6 @@ async function fetchLore(ctx){
   ]);
   h += `<div class="note">Only properties the Landmarks Preservation Commission has designated as individual landmarks appear here — famous sites without that designation (the Old Stone House, a 1930s reconstruction, for example) will not. Landmark links open the designation report. Wikipedia results are whatever articles are geotagged closest to this point.</div>`;
   el.innerHTML = h;
-  el.querySelectorAll('.poi').forEach(li => {
-    li.addEventListener('mouseenter', () => showPoi(+li.dataset.lat, +li.dataset.lng, li.dataset.name));
-    li.addEventListener('mouseleave', clearPoi);
-  });
   try{
     const r = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}|${lng}&gsradius=800&gslimit=5&format=json&origin=*`);
     const items = (await r.json()).query?.geosearch || [];
@@ -2018,10 +2372,6 @@ async function fetchLore(ctx){
     $('wiki').innerHTML = `<ul class="toplist">`+items.map(w=>`<li class="poi" data-lat="${w.lat}" data-lng="${w.lon}" data-name="${esc(w.title)}">
       <span><a href="https://en.wikipedia.org/wiki/${encodeURIComponent(w.title.replace(/ /g,'_'))}" target="_blank" rel="noopener">${esc(w.title)}</a></span>
       <span class="n">${w.dist<100?Math.round(w.dist)+' m':walkmin(w.dist)+' min'}</span></li>`).join('')+`</ul>`;
-    $('wiki').querySelectorAll('.poi').forEach(li => {
-      li.addEventListener('mouseenter', () => showPoi(+li.dataset.lat, +li.dataset.lng, li.dataset.name));
-      li.addEventListener('mouseleave', clearPoi);
-    });
   }catch(e){ if(!stale(ctx)&&$('wiki')) $('wiki').innerHTML='<span class="errnote">Wikipedia unavailable right now.</span>'; }
 }
 
@@ -2042,14 +2392,14 @@ function neighborhoodsProjectLink(nta){
 }
 
 /* ---------- 9 · demographics ---------- */
-function demographicsBlock(nta, boro){
+function demographicsBlock(nta, boro, lat, lng){
   if (!nta) return '';
   const code = nta.properties.nta2020;
   const D = DATA.nta_demographics[code];
   const CITY = DATA.compare_geos.NYC;
   const BORO = DATA.compare_geos[boro];
   const isPark = nta.properties.ntatype && nta.properties.ntatype !== '0';
-  let h = `<section class="blk" id="sec-numbers"><h3><span class="num">8</span> ${esc(nta.properties.ntaname)} in numbers</h3>`;
+  let h = `<section class="blk" id="sec-numbers"${areaAttr('layer:nta', `Neighborhood figures: the whole of ${nta.properties.ntaname} (${code})`)}><h3><span class="num">8</span> ${esc(nta.properties.ntaname)} in numbers</h3>`;
   if (!D || !D.pop || (isPark && D.pop < 200)){
     h += `<div class="note" style="margin:0">This area (a park, airport, cemetery or other special zone) has no meaningful residential profile.</div></section>`;
     return h;
@@ -2082,13 +2432,14 @@ function demographicsBlock(nta, boro){
     <div class="racekey">`+seg.map(s=>`<span><i style="background:${s[2]}"></i>${s[0]} ${pct(s[1])}</span>`).join('')+`</div></div>`;
   if (D.mean_commute) h += row('Mean commute', `${D.mean_commute} minutes`);
   // tract display context: the point's own census tract, shown with its margin of error
-  const tr = lookup(LAYERS.tracts, _demoLat, _demoLng);
-  const tc = tr && DATA.tract_context[tr.properties.geoid];
-  if (tc && tc.inc){
-    h += `<div class="row" style="margin-top:8px"><span class="k">This census tract specifically</span><span class="v">${money(tc.inc)}${tc.moe?` ±${money(tc.moe)}`:''}<span class="meta">median income, tract of ~${fmt(tc.pop)} people${tc.rs?` · ${fmt(tc.rs)} rent-stabilized units`:''}. Tract survey numbers are noisy — the margin shows why the neighborhood figures above are the reliable read.</span></span></div>`;
-  }
+  h += later(['tracts','tract_context'], () => {
+    const tr = layerFeat('tracts');
+    const tc = tr && DATA.tract_context[tr.properties.geoid];
+    if (!tc || !tc.inc) return '';
+    return `<div class="row hl" data-layer="tracts" style="margin-top:8px"${areaAttr('layer:tracts', 'This census tract')}><span class="k">This census tract specifically</span><span class="v">${money(tc.inc)}${tc.moe?` ±${money(tc.moe)}`:''}<span class="meta">median income, tract of ~${fmt(tc.pop)} people${tc.rs?` · ${fmt(tc.rs)} rent-stabilized units`:''}. Tract survey numbers are noisy — the margin shows why the neighborhood figures above are the reliable read.</span></span></div>`;
+  }, '');
   h += `<div class="note">American Community Survey 2020-2024 five year estimates, aggregated from census tracts to neighborhood tabulation area ${esc(code)} (medians re-interpolated from pooled bracket distributions, not averaged); rent-stabilized counts are administrative, via JustFix from tax filings. Survey numbers carry real margins of error; treat differences of a few points as noise.</div>`;
-  h += ranksBlock(nta);
+  h += later(['rankings'], () => ranksBlock(nta));
   h += `</section>`;
   return h;
 }
@@ -2188,7 +2539,6 @@ function ranksBlock(nta){
   h += `<div class="note">Ranks come from "Every neighborhood, ranked," a companion project that sorts the ${fmt(R.areas)} residential neighborhood tabulation areas by ${R.metrics.length} measures. Rank 1 is the highest value, not the best one — first in felony complaints means the most of them. Rates per 1,000 residents run high in business districts, where the weekday crowd is not counted as residents. Neighborhoods with identical values share a rank. Census medians stop at $200,000 for income, $3,500 for rent and $2 million for home value, marked with a plus.</div>`;
   return h;
 }
-let _demoLat = 0, _demoLng = 0;
 function boroNote(bv, fmtfn){ return bv!=null ? `<span style="font-weight:400;color:#8a8f9e"> · boro ${fmtfn(bv)}</span>` : ''; }
 function cmpPct(label, v, cityv, borov){
   if (v==null) return '';
@@ -2207,7 +2557,7 @@ function cmpScaled(label, v, cityv, scale, fmtfn, borov){
 function readMoreBlock(nta, boro, bbl, zip){
   const hood = nta ? nta.properties.ntaname.split('-')[0].split('(')[0].trim() : (boro || 'New York City');
   const q = encodeURIComponent(`"${hood}" ${boro||'New York City'}`);
-  return `<section class="blk"><h3><span class="num">10</span> What people are saying</h3>
+  return `<section class="blk" id="sec-saying"><h3><span class="num">10</span> What people are saying</h3>
     <div class="morelinks" style="margin-top:2px">
       <a href="https://news.google.com/search?q=${q}" target="_blank" rel="noopener">${esc(hood)} in the news</a>
       <a href="https://www.reddit.com/search/?q=${q}" target="_blank" rel="noopener">Reddit conversations</a>
@@ -2221,6 +2571,7 @@ let lazyLoaders = null;
 async function printProfile(ctx){
   const btn = $('printbtn');
   if (btn){ btn.textContent = '⎙ Preparing…'; btn.disabled = true; }
+  await allReady;
   // force every lazy section to load and wait for its live tiles to settle
   document.querySelectorAll('[data-lazy]').forEach(s => {
     if (!s.dataset.loaded){ s.dataset.loaded = '1'; lazyLoaders?.[s.dataset.lazy]?.(); }
@@ -2241,14 +2592,14 @@ async function printProfile(ctx){
 }
 
 /* ---------- chrome ---------- */
-$('closepanel').addEventListener('click', () => { $('panel').classList.remove('open'); clearShape(); clearPoi(); });
+$('closepanel').addEventListener('click', () => { $('panel').classList.remove('open'); unpinShape(); unpinPoi(); clearArea(); });
 $('aicaution').addEventListener('click', () => $('aipop').classList.toggle('show'));
 document.addEventListener('click', e => {
   if (!$('aipop').contains(e.target) && e.target !== $('aicaution')) $('aipop').classList.remove('show');
 });
 if (location.hash){
   const m = location.hash.slice(1).split(',').map(Number);
-  if (m.length===2 && isFinite(m[0]) && isFinite(m[1])) ready.then(()=>inspect(m[0], m[1]));
+  if (m.length===2 && isFinite(m[0]) && isFinite(m[1])) coreReady.then(()=>inspect(m[0], m[1]));
 }
 </script>
 </body>

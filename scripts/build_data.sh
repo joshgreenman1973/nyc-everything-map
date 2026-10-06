@@ -72,10 +72,12 @@ json.dump(out, open('subway.json','w'), ensure_ascii=False)
 PY
 
 # ------------------------------------------------- 4b. schools, landmarks, environment
-# WARNING: rerunning bake_extras.py elections() would DROP the 2024 presidential
-# fields (x_harris/x_trump/x_total) and the crossed-indicator NTA fields
-# (vcrime_n, evic_n, newbuild_n, pm25) — those merges live only in git history
-# (see the NOTE at the end of bake_extras.py). Re-apply them after any rebake.
+# bake_extras.py re-applies the 2024 presidential fields (x_harris/x_trump/x_total/
+# x_joint: pres24(), run at the end of elections()) and the crossed-indicator NTA
+# fields (vcrime_n, evic_n, newbuild_n, pm25: nta_indicators(), run after
+# density_fields()). The eviction and new-building windows are frozen constants
+# there; those city feeds get revised, so expect small drift from the published
+# values on a rebake (see the NOTE at the end of bake_extras.py).
 python3 ../../scripts/bake_extras.py
 
 # ---------------------------------------------------------------- 5. publish
@@ -93,4 +95,9 @@ python3 scripts/refresh_askingrents.py
 
 # ---------------------------------------------------------------- 8. validate
 python3 scripts/validate_lookups.py
-echo "Done. Review validation output above before deploying."
+
+# ------------------------------------------------- 9. TopoJSON copies for the site
+# The page loads docs/data/<layer>.topo.json, not the GeoJSON. This rewrites all 17
+# and fails if the conversion moved any lookup that isn't on a boundary line.
+node scripts/build_topo.mjs
+echo "Done. Review validation output above, then bump DATA_VERSION in docs/index.html before deploying."

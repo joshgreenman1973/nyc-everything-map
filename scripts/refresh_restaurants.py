@@ -5,8 +5,9 @@ Pulls fresh DOHMH data (via build_restaurants.py), and if the cuisine/point data
 actually changed, commits and pushes docs/data/restaurants.json to origin/main so
 the live GitHub Pages map updates. Notifies Josh via iMessage on the outcome.
 
-Run by launchd (com.joshgreenman.everything-map-restaurants); also safe to run by
-hand: python3 scripts/refresh_restaurants.py
+Run monthly by the GitHub Action .github/workflows/restaurant-refresh.yml (the
+old launchd job on the laptop is retired); also safe to run by hand:
+python3 scripts/refresh_restaurants.py
 """
 import json, os, subprocess, sys
 from datetime import datetime

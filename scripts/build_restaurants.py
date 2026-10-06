@@ -4,7 +4,7 @@
 Self-contained: pulls straight from the DOHMH NYC Restaurant Inspection Results
 (NYC Open Data / Socrata dataset 43nn-pn8j) so it can run unattended on a
 schedule. No third-party packages — standard library only, so the system
-python3 can run it under launchd.
+python3 can run it unattended.
 
 Each establishment is counted once (distinct CAMIS), tagged with the city's
 self-reported coarse "cuisine" label and its latest A/B/C letter grade.

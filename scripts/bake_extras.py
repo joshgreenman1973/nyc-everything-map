@@ -145,7 +145,8 @@ def busstops():
     print(len(out), 'bus stops')
 
 def elections():
-    """Merge the election archive's 2025 general + primary ED results and simplify.
+    """Merge the election archive's 2025 general + primary ED results and simplify,
+    then attach the 2024 presidential fields (pres24 below).
     Requires a local clone of nyc-election-archive next to this project."""
     base = '/Users/joshgreenman/Experiments/nyc-election-archive/docs'
     gen = json.load(open(f'{base}/results_2025_general_mayor.geojson'))
@@ -171,6 +172,65 @@ def elections():
     d['features'] = [f for f in d['features'] if f.get('geometry')]
     json.dump(d, open(f'{OUT}/elections.json', 'w'))
     print(len(d['features']), 'election districts')
+    pres24()
+
+PRES24_CSV = ('https://vote.nyc/sites/default/files/pdf/election_results/2024/20241105General%20Election/'
+              '00000100000Citywide%20President%20Vice%20President%20Citywide%20EDLevel.csv')
+
+def pres24():
+    """2024 presidential by election district, merged into elections.json as
+    x_harris / x_trump (percent of the two-party vote) and x_total (Harris +
+    Trump votes; write-ins and blanks excluded), keyed on AD*1000+ED.
+    Source: the Board of Elections' certified citywide ED-level CSV (PRES24_CSV),
+    cached as pres2024.csv. Fusion lines are summed: Working Families into
+    Harris, Conservative into Trump. Tallies of 1,000 or more carry a thousands
+    comma ("1,020"); the June 2026 one-off parse dropped those, which zeroed the
+    Democratic or Republican line in 37 districts.
+    The board counted 232 small districts jointly with a neighbor (EDAD Status
+    'COMBINED INTO ED/AD', no tally of their own). A district with no tally of
+    its own takes its partner's joint tally and records the partner in x_joint.
+    Districts still unresolved get no x_ fields; the app says so."""
+    import csv, re
+    if not os.path.exists('pres2024.csv'):
+        req = urllib.request.Request(PRES24_CSV, headers={'User-Agent': 'Mozilla/5.0'})
+        open('pres2024.csv', 'wb').write(urllib.request.urlopen(req).read())
+    tally, combined = {}, {}
+    for r in csv.reader(open('pres2024.csv', encoding='utf-8-sig')):
+        v = r[11:] if len(r) == 22 else r  # the BOE file repeats the 11 header names on every row
+        if v[0] == 'AD':
+            continue
+        ed = int(v[0]) * 1000 + int(v[1])
+        m = re.match(r'COMBINED INTO (\d+)/(\d+)', v[3])
+        if m:
+            combined[ed] = int(m.group(2)) * 1000 + int(m.group(1))
+            continue
+        n = int(v[10].replace(',', '') or 0)
+        t = tally.setdefault(ed, [0, 0])
+        if v[9].startswith('Kamala D. Harris'):
+            t[0] += n
+        elif v[9].startswith('Donald J. Trump'):
+            t[1] += n
+    tally = {ed: t for ed, t in tally.items() if sum(t)}
+    d = json.load(open(f'{OUT}/elections.json'))
+    n_own = n_joint = 0
+    for f in d['features']:
+        p = f['properties']
+        for k in ('x_harris', 'x_trump', 'x_total', 'x_joint'):
+            p.pop(k, None)
+        src = p['ed'] if p['ed'] in tally else combined.get(p['ed'])
+        if src not in tally:
+            continue
+        h, t = tally[src]
+        p.update({'x_harris': round(h / (h + t) * 100, 1), 'x_trump': round(t / (h + t) * 100, 1), 'x_total': h + t})
+        if src != p['ed']:
+            p['x_joint'] = src
+            n_joint += 1
+        else:
+            n_own += 1
+    json.dump(d, open(f'{OUT}/elections.json', 'w'))
+    H, T = sum(t[0] for t in tally.values()), sum(t[1] for t in tally.values())
+    print(n_own, 'districts with a 2024 presidential tally,', n_joint, 'more counted jointly;',
+          f'citywide two-party Harris {H / (H + T) * 100:.1f}')
 
 def neighborhoods_project():
     """Map Rob Stephenson's The Neighborhoods Substack posts to neighborhoods.
@@ -285,16 +345,105 @@ def lightcrime():
                'hexes': hexes}, open(f'{OUT}/lightcrime.json', 'w'))
     print(len(hexes), 'lighting-crime hexes')
 
-if __name__ == '__main__':
-    schools(); school_quality(); landmarks(); airquality(); hvi(); density_fields(); cityoutline(); busstops(); elections(); neighborhoods_project(); hospitals(); lightcrime()
+# Neighborhood indicators for the "Two factors at once" presets. The windows are
+# frozen at the ones first published (June 2026) so a rebake reproduces the site;
+# move them deliberately, and update the methodology page when you do.
+EVIC_WINDOW = ('2024-06-01', '2026-06-04')      # executed_date, inclusive
+NEWBUILD_WINDOW = ('2025-06-11', '2026-06-08')  # filing_date, inclusive
+PM25_YEAR = 2023
 
-# NOTE: two additional one-time merges live in git history (June 2026) and should
-# be folded into functions here on the next data refresh:
-# 1. pres24: certified BOE 2024 presidential ED-level CSV (vote.nyc) parsed with
-#    fusion lines summed, merged into docs/data/elections.json as x_harris /
-#    x_trump / x_total keyed on AD*1000+ED.
-# 2. nta indicators for the crossed-indicators presets: vcrime_n (summed from the
-#    bivariate lighting-crime hexes by NTA name), evic_n (evictions last 24 months,
-#    point-assigned to NTAs), newbuild_n (DOB NOW New Building filings, 12 months,
-#    by NTA name) and pm25 (community district 2023 annual average via CDTA code),
-#    merged into docs/data/nta_demographics.json.
+def vcrime_by_nta(names):
+    """Outdoor violent crime points summed from the bivariate lighting-crime hexes,
+    which carry an NTA name (crime window: see the hexes file's meta)."""
+    d = json.load(urllib.request.urlopen('https://vitalcity-nyc.github.io/bivariate-lighting-crime/hexes.geojson'))
+    out = {}
+    for f in d['features']:
+        code = names.get(f['properties'].get('nta'))
+        if code:
+            out[code] = out.get(code, 0) + f['properties'].get('crime_n', 0)
+    return out
+
+def evictions_by_nta(nta, start=EVIC_WINDOW[0], end=EVIC_WINDOW[1]):
+    """Marshal-executed evictions (6z8x-wfk4, residential and commercial),
+    assigned to NTAs by point location. The dataset's own nta field mostly
+    carries 2010 NTA names, so it is not used."""
+    from shapely.geometry import shape, Point
+    from shapely.strtree import STRtree
+    geoms = [shape(f['geometry']) for f in nta['features']]
+    codes = [f['properties']['nta2020'] for f in nta['features']]
+    tree = STRtree(geoms)
+    rows = soda('6z8x-wfk4', {'$select': 'latitude,longitude',
+        '$where': f"executed_date between '{start}' and '{end}' AND latitude IS NOT NULL", '$limit': 200000})
+    out = {}
+    for r in rows:
+        try: pt = Point(float(r['longitude']), float(r['latitude']))
+        except (KeyError, TypeError, ValueError): continue
+        code = next((codes[i] for i in tree.query(pt) if geoms[i].contains(pt)), None)
+        if code:
+            out[code] = out.get(code, 0) + 1
+    return out
+
+def newbuild_by_nta(names, start=NEWBUILD_WINDOW[0], end=NEWBUILD_WINDOW[1]):
+    """New building jobs filed in DOB NOW (w9ak-ipjd), by the dataset's NTA name.
+    One row per filing, and a job has many: -I1 is the initial filing, -S1, -S2...
+    are subsequent filings and -P1, -P2... post-approval amendments, so only -I1
+    rows count, dated by the job's initial filing. Counting every row (the June
+    2026 one-off) inflated the figure about eightfold. As of Oct. 2026, 9,757 of
+    the 9,764 New Building jobs have exactly one -I1 row; the other 7 have no
+    filing inside the window."""
+    rows = soda('w9ak-ipjd', {'$select': 'nta,count(*) AS n', '$group': 'nta', '$limit': 1000,
+        '$where': f"job_type='New Building' AND job_filing_number like '%-I1' "
+                  f"AND filing_date between '{start}T00:00:00' and '{end}T23:59:59'"})
+    return {names[r['nta']]: int(r['n']) for r in rows if r.get('nta') in names}
+
+def pm25_by_nta(nta, year=PM25_YEAR):
+    """Community district annual-average PM2.5 (c3uy-2p5r), joined through each
+    NTA's CDTA code (BK01 -> 301). Parks, airports and other joint interest
+    areas (BK55, QN80...) are not community districts and get no value."""
+    rows = soda('c3uy-2p5r', {'$select': 'geo_join_id,data_value', '$limit': 100,
+        '$where': f"name='Fine particles (PM 2.5)' AND geo_type_name='CD' AND measure='Annual mean' "
+                  f"AND time_period in ('{year}','Annual Average {year}')"})
+    cd = {r['geo_join_id']: round(float(r['data_value']), 1) for r in rows}
+    boro = {'MN': '1', 'BX': '2', 'BK': '3', 'QN': '4', 'SI': '5'}
+    out = {}
+    for f in nta['features']:
+        c = f['properties']['cdta2020']
+        if boro[c[:2]] + c[2:] in cd:
+            out[f['properties']['nta2020']] = cd[boro[c[:2]] + c[2:]]
+    return out
+
+def nta_indicators():
+    """Add vcrime_n, evic_n, newbuild_n and pm25 to nta_demographics (raw and
+    published copies, like density_fields). NTAs with no events get 0."""
+    nta = json.load(open('nta.geojson'))
+    names = {f['properties']['ntaname']: f['properties']['nta2020'] for f in nta['features']}
+    vc, ev, nb, pm = vcrime_by_nta(names), evictions_by_nta(nta), newbuild_by_nta(names), pm25_by_nta(nta)
+    demo = json.load(open('nta_demographics.json'))
+    for code, d in demo.items():
+        d['vcrime_n'], d['evic_n'], d['newbuild_n'] = vc.get(code, 0), ev.get(code, 0), nb.get(code, 0)
+        if code in pm:
+            d['pm25'] = pm[code]
+        else:
+            d.pop('pm25', None)
+    json.dump(demo, open('nta_demographics.json', 'w'))
+    json.dump(demo, open(f'{OUT}/nta_demographics.json', 'w'))
+    print('NTA indicators added:', sum(vc.values()), 'violent crimes,', sum(ev.values()), 'evictions,',
+          sum(nb.values()), 'new building jobs,', len(pm), 'NTAs with PM2.5')
+
+if __name__ == '__main__':
+    schools(); school_quality(); landmarks(); airquality(); hvi(); density_fields(); nta_indicators(); cityoutline(); busstops(); elections(); neighborhoods_project(); hospitals(); lightcrime()
+
+# NOTE: the two June 2026 one-off merges became functions in Oct. 2026: pres24()
+# (called at the end of elections()) and nta_indicators() (called after
+# density_fields()). Their code was never committed; both were rebuilt from the
+# baked values (for pres24, also from the pres24_*.json intermediates in data/raw/).
+# - pres24() reproduces the June elections.json byte for byte when tallies with a
+#   thousands comma are zeroed, as the June parse did. Parsed correctly, 37
+#   districts change (those whose Democratic or Republican line was 1,000 or more)
+#   and the citywide two-party Harris share is 69.4, not 69.0. elections.json was
+#   rebaked with the corrected parse.
+# - vcrime_n and pm25 reproduce for all 262 NTAs. evic_n reproduces for 210 of 262
+#   (33,968 vs 33,979 citywide, no NTA off by more than 4): the eviction feed has
+#   been revised since June, so the committed evic_n values were left alone.
+# - newbuild_n was rebaked with initial filings only (see newbuild_by_nta): 1,897
+#   jobs citywide, down from 15,353 filing rows.
