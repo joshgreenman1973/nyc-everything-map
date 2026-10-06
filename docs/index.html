@@ -183,8 +183,10 @@ li.poi.pinned{background:#fdf4dc}
 .chapbar{position:sticky; top:0; height:0; z-index:6}
 .chapbar .in{position:absolute; left:0; right:0; top:0; display:flex; align-items:center; gap:9px;
   padding:8px 56px 8px 26px; min-height:42px; background:var(--navy); color:#fff; font:700 11px 'Archivo'; letter-spacing:.12em;
-  text-transform:uppercase; transform:translateY(-110%); transition:transform .2s; box-shadow:0 6px 14px rgba(22,33,58,.2)}
-.chapbar.stuck .in{transform:none}
+  text-transform:uppercase; transform:translateY(-110%); opacity:0; visibility:hidden; pointer-events:none;
+  transition:transform .2s, opacity .2s, visibility 0s .2s; box-shadow:0 6px 14px rgba(22,33,58,.2)}
+/* hidden outright until the chapter list has scrolled away; translating alone left it over the list */
+.chapbar.stuck .in{transform:none; opacity:1; visibility:visible; pointer-events:auto; transition:transform .2s, opacity .2s}
 .chapbar .cn{font-family:'Fraunces',serif; font-weight:900; font-size:15px; color:var(--gold); letter-spacing:0}
 .chapbar .ct{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .chapbar select{margin-left:auto; flex:none; font:600 12px 'Archivo'; text-transform:none; letter-spacing:0; cursor:pointer;
