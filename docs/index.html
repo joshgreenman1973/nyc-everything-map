@@ -209,6 +209,9 @@ li.poi.pinned{background:#fdf4dc}
 .cmp .track{position:relative; height:12px; background:var(--paper-deep); border-radius:6px; border:1px solid var(--line)}
 .cmp .fill{position:absolute; left:0; top:0; bottom:0; background:var(--gold); border-radius:6px 0 0 6px; min-width:2px}
 .cmp .citymark{position:absolute; top:-3px; bottom:-3px; width:2.5px; background:var(--navy)}
+.cmp.unrel{opacity:.5}
+.cmp .lead{font:700 9.5px 'Archivo'; letter-spacing:.06em; text-transform:uppercase; color:var(--gold-deep); margin-left:6px; white-space:nowrap}
+.legendline .fd{display:inline-block; width:14px; height:8px; background:var(--gold); opacity:.5; border-radius:3px; margin-right:4px; vertical-align:-1px}
 .legendline{display:flex; gap:14px; align-items:center; font-size:10.5px; color:#8a8f9e; margin-bottom:10px}
 .legendline .sw{display:inline-block; width:14px; height:8px; background:var(--gold); border-radius:3px; margin-right:4px; vertical-align:-1px}
 .legendline .mk{display:inline-block; width:2.5px; height:11px; background:var(--navy); margin-right:5px; vertical-align:-2px}
@@ -393,16 +396,16 @@ const LAYERS = {}, DATA = {};
 // Boundary layers ship as TopoJSON (shared borders stored once, coordinates
 // quantized to about half a meter, well inside the 2 meter simplification).
 const CORE_LAYERS = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic'];
-const LATE_LAYERS = ['elections','tracts','hoods_alt','hoods_whong'];
+const LATE_LAYERS = ['elections','tracts','hoods_alt','hoods_whong','puma'];
 const CORE_DATA = ['officials','nta_demographics','compare_geos','subway','schools','airquality','hvi','hospitals','colleges','libraries','supermarkets','askingrents','parks'];
-const LATE_DATA = ['restaurants','commonplace','busstops','play','artsvenues','publicart','worship','rankings','tract_context','landmarks','neighborhoods_project','transit45'];
+const LATE_DATA = ['restaurants','commonplace','busstops','play','artsvenues','publicart','worship','rankings','tract_context','landmarks','neighborhoods_project','transit45','languages'];
 let loaded = 0, totalFiles = CORE_LAYERS.length + LATE_LAYERS.length + CORE_DATA.length + LATE_DATA.length;
 function tick(){
   loaded++;
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '29'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '30'; // bump when files in data/ change, so cached copies refresh
 const FILE_P = {};   // file name -> promise that resolves once it is parsed into LAYERS or DATA
 function loadFile(f, isLayer, init, tries=2){
   return fetch(`data/${f}${isLayer ? '.topo' : ''}.json?v=${DATA_VERSION}`, init)
@@ -2442,7 +2445,40 @@ function demographicsBlock(nta, boro, lat, lng){
   }, '');
   h += `<div class="note">American Community Survey 2020-2024 five year estimates, aggregated from census tracts to neighborhood tabulation area ${esc(code)} (medians re-interpolated from pooled bracket distributions, not averaged); rent-stabilized counts are administrative, via JustFix from tax filings. Survey numbers carry real margins of error; treat differences of a few points as noise.</div>`;
   h += later(['rankings'], () => ranksBlock(nta));
+  h += later(['puma','languages'], languagesBlock, '');
   h += `</section>`;
+  return h;
+}
+
+/* ---------- languages, from the city's NYC Language Explorer ----------
+   The planning department's July 2026 tool tabulates census microdata, which come
+   no finer than PUMAs: census areas of about 100,000 people that the city uses as
+   stand-ins for community districts. So this block covers more ground than the
+   neighborhood figures above it, and it draws that larger area on the map. */
+const LANG_SHOWN = 8;
+function languagesBlock(){
+  const f = layerFeat('puma'), L = DATA.languages;
+  const P = f && L.puma[f.properties.puma];
+  if (!P) return '';
+  const CITY = L.city, BORO = L.boro[P.boro];
+  const stand = `${P.boro} community district${P.cds.includes('&') ? 's ' + P.cds.replace(' & ', ' and ') : ' ' + P.cds}`;
+  let h = `<div${areaAttr('layer:puma', `Languages: ${P.name}, the census area standing in for ${stand}`)}>
+    <div class="subhead">Languages across ${esc(P.name)}</div>
+    <div class="row hl" data-layer="puma"><span class="k">Area these figures cover</span><span class="v">${esc(P.name)}<span class="meta">census area ${esc(f.properties.puma)}, which ${P.exact ? 'corresponds to' : 'approximates'} ${esc(stand)} · ${fmt(P.pop5)} residents age 5 and older</span></span></div>`;
+  h += cmpPct('Speak a language other than English at home', P.other_pct, CITY.other_pct, BORO?.other_pct);
+  h += cmpPct('Speak English less than "very well"', P.lep_pct, CITY.lep_pct, BORO?.lep_pct);
+  h += row('Residents with limited English', `${fmt(P.lep)} <span style="font-weight:400;color:#8a8f9e">±${fmt(P.lep_moe)}</span><span class="meta">citywide ${fmt(CITY.lep)}</span>`);
+  const shown = P.langs.slice(0, LANG_SHOWN), rest = P.langs.length - shown.length;
+  h += `<div class="cmp" style="margin:12px 0 6px"><div class="lab"><span>What they speak</span><span style="color:#8a8f9e">share of residents with limited English</span></div></div>
+    <div class="legendline"><span><span class="sw"></span>here</span><span><span class="mk"></span>citywide</span><span><span class="fd"></span>unreliable estimate</span></div>`;
+  h += shown.map(([name, est, moe, ok, share, most]) => {
+    const city = CITY.share[name];
+    return `<div class="cmp${ok ? '' : ' unrel'}"${ok ? '' : ' title="Unreliable: the coefficient of variation is 20 percent or more"'}><div class="lab"><span>${esc(name.replace(/\s*\(.*\)$/, ''))}${most ? '<span class="lead">most of any district</span>' : ''}</span><b>${pct(share)}<span style="font-weight:400;color:#8a8f9e"> · ${fmt(est)} ±${fmt(moe)}</span></b></div>
+      <div class="track"><div class="fill" style="width:${Math.min(100, share)}%"></div>${city != null ? `<div class="citymark" style="left:${Math.min(100, city)}%" title="citywide ${pct(city)}"></div>` : ''}</div></div>`;
+  }).join('');
+  if (rest > 0) h += `<div class="note" style="margin-top:2px">Plus ${rest} more language${rest > 1 ? 's' : ''} with smaller estimates.</div>`;
+  h += `<div class="morelinks"><a href="${L.explorer}" target="_blank" rel="noopener">The city's NYC Language Explorer</a></div>
+    <div class="note">Department of City Planning, NYC Language Explorer (June 2026), from American Community Survey 2020-2024 public-use microdata. Those records are published no finer than census areas of about 100,000 people, so these figures cover more ground than the neighborhood numbers above; the limited-English share differs from the neighborhood figure for that reason, not because the definition changes. Counts are residents age 5 and older, with 90 percent margins of error. Faded rows are unreliable (a coefficient of variation of 20 percent or more), and languages whose margin of error is as large as the estimate are left out, as the city's tool does. "Most of any district" appears only where the lead over the next district is larger than sampling error. Chinese includes Mandarin and Cantonese; Tagalog includes Filipino; French includes Cajun; Persian includes Farsi and Dari; Akan includes Twi.</div></div>`;
   return h;
 }
 

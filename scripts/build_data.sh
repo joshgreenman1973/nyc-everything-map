@@ -93,11 +93,15 @@ python3 scripts/refresh_acs2024.py
 # ------------------------------------------------------- 7. asking rents (StreetEasy)
 python3 scripts/refresh_askingrents.py
 
+# ------------------------------------- 7b. languages (City Planning's Language Explorer)
+# Writes docs/data/languages.json and the puma boundary layer (see the script's header).
+python3 scripts/bake_languages.py
+
 # ---------------------------------------------------------------- 8. validate
 python3 scripts/validate_lookups.py
 
 # ------------------------------------------------- 9. TopoJSON copies for the site
-# The page loads docs/data/<layer>.topo.json, not the GeoJSON. This rewrites all 17
+# The page loads docs/data/<layer>.topo.json, not the GeoJSON. This rewrites all 18
 # and fails if the conversion moved any lookup that isn't on a boundary line.
 node scripts/build_topo.mjs
 echo "Done. Review validation output above, then bump DATA_VERSION in docs/index.html before deploying."

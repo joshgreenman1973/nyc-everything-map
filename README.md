@@ -50,6 +50,7 @@ Things that bite:
 - The Board of Elections CSV writes tallies over 999 with a comma ("1,020"). `pres24()` handles it; a June 2026 one-off parse didn't, and 37 districts were wrong until October 2026.
 - Some city feeds stall for months (business licenses, film permits, crashes), and the crime complaint file is quarterly. The page checks each feed's newest record and says when it lags; nothing to fix on this end.
 - Hospital emergency-room status is a hand-checked list in `bake_extras.py hospitals()`. Emergency departments open and close.
+- The languages block (`bake_languages.py`) reads City Planning's NYC Language Explorer layers on ArcGIS Online. City Planning names them by release (`PUMAData_Language_Mar2026`), so a new edition will likely live at a new URL: find it in the Explorer's app config (`arcgis.com/sharing/rest/content/items/0da08a1596574ec78cbaa5bef6a04b3e/data?f=json`) and update the constants. The long table's district numbers have errors; the script joins on names.
 
 ## Refresh calendar
 
@@ -62,6 +63,7 @@ Things that bite:
 | Jan. 1, 2027 | The new State Legislature takes office, including a senator for District 12 (vacant since Aug. 7, 2026). Update `officials.json`, the "verified" date in the representation chapter and the methodology page |
 | Jan. 3, 2027 | The new Congress takes office; recheck the House members |
 | Weekly, optional | `bake_extras.py neighborhoods_project()` picks up new posts from Rob Stephenson's The Neighborhoods |
+| When City Planning updates the Language Explorer | Probably after the ACS 2021-2025 microdata come out (usually January): rerun `bake_languages.py` and `build_topo.mjs`, update the vintage in the block's note and the methodology page |
 | Each refresh | Recheck the hospital emergency-room list and the feed lag notes |
 
 ## Serving locally

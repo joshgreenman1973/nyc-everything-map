@@ -18,7 +18,7 @@ import fs from 'node:fs';
 
 const DIR = 'docs/data';
 const LAYERS = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress',
-  'assembly','senate','hurricane','historic','elections','tracts','hoods_alt','hoods_whong'];
+  'assembly','senate','hurricane','historic','elections','tracts','hoods_alt','hoods_whong','puma'];
 const QUANT = '1e5', SAMPLES = 6000, TOLERANCE_M = 1;
 
 // --- the same decoder and point-in-polygon test the page uses ---
