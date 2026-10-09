@@ -137,6 +137,7 @@ code{background:#efe9da; border-radius:4px; padding:1px 6px; font-size:13px}
 </ul>
 
 <h2>Live feeds</h2>
+<p>These are queried from NYC Open Data each time you open a point. The portal has bad stretches when it answers some queries with an instant "service unavailable" error and holds others open for minutes, so the page retries a quick failure twice, gives up on any one query after 25 seconds, and says a feed is unavailable rather than leaving a spinner. In the safety chapter only the current complaint counts are required; if last year's comparison, the monthly chart or the precinct rank fails to load, the rest still shows.</p>
 <table>
 <tr><th>Panel item</th><th>Dataset</th><th>Query</th></tr>
 <tr><td>This lot</td><td><a href="https://data.cityofnewyork.us/City-Government/Primary-Land-Use-Tax-Lot-Output-PLUTO-/64uk-42ks">PLUTO (64uk-42ks)</a></td><td>By the tax lot number GeoSearch returns for the address. Zoning, land use, year built, floor area ratio, units, assessed value and owner of record are shown as published. PLUTO's "year built" is known to be approximate for pre-war buildings.</td></tr>

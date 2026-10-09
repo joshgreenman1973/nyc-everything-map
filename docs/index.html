@@ -804,10 +804,28 @@ function daysAgoISO(days){ return new Date(Date.now()-days*86400000).toISOString
 function row(k,v,layerKey=null){
   return `<div class="row${layerKey?' hl':''}"${layerKey?` data-layer="${layerKey}"`:''}><span class="k">${k}</span><span class="v">${v}</span></div>`;
 }
-function soda(dataset, params){
+/* NYC Open Data has bad stretches: it answers some queries with an instant 503
+   (or a 403/429 when anonymous traffic is throttled) and holds others open for
+   minutes. Quick failures get two retries with backoff; any one try is abandoned
+   after 25 seconds, so a block says the feed is unavailable instead of spinning. */
+const SODA_RETRY = new Set([403, 429, 500, 502, 503, 504]);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function soda(dataset, params, tries=3){
   const u = new URL(`https://data.cityofnewyork.us/resource/${dataset}.json`);
   Object.entries(params).forEach(([k,v]) => u.searchParams.set(k,v));
-  return fetch(u).then(r => { if(!r.ok) throw new Error(r.status); return r.json(); });
+  for (let i = 1; ; i++){
+    const ac = new AbortController(), timer = setTimeout(() => ac.abort(), 25000);
+    let status = 0;
+    try{
+      const r = await fetch(u, {signal: ac.signal});
+      if (r.ok) return await r.json();
+      status = r.status;
+    }catch(e){
+      if (e.name === 'AbortError') throw new Error(`${dataset}: timed out`);
+    }finally{ clearTimeout(timer); }
+    if ((status && !SODA_RETRY.has(status)) || i >= tries) throw new Error(`${dataset}: ${status || 'network error'}`);
+    await sleep(600 * 2 ** (i - 1) + Math.random() * 400);
+  }
 }
 function precinctUrl(n){
   if (n===22) return 'https://www.nyc.gov/site/nypd/bureaus/patrol/precincts/central-park-precinct.page';
@@ -2005,7 +2023,7 @@ function perResident(ctx, localTotal, cityTotal, radiusM){
 let _city311 = null;
 function city311Total(since){
   if (!_city311) _city311 = soda('erm2-nwe9',{'$select':'count(*) as n','$where':`created_date > '${since}'`})
-    .then(r=>+r[0].n).catch(()=>null);
+    .then(r=>+r[0].n).catch(()=>{ _city311 = null; return null; });
   return _city311;
 }
 
@@ -2013,7 +2031,7 @@ function city311Total(since){
 let _compstat = null;
 function compstatData(){
   if (!_compstat) _compstat = fetch('https://raw.githubusercontent.com/joshgreenman1973/nypd-compstat-scraper/main/data/latest_compstat.json')
-    .then(r => { if(!r.ok) throw new Error(r.status); return r.json(); }).catch(()=>null);
+    .then(r => { if(!r.ok) throw new Error(r.status); return r.json(); }).catch(()=>{ _compstat = null; return null; });
   return _compstat;
 }
 function signedPct(v){
@@ -2056,27 +2074,26 @@ async function crimeBaselines(){
   crimeCache.end = meta[0].latest.slice(0,10);
   crimeCache.start = meta[0].earliest.slice(0,10);
   crimeCache.cityTotal = +meta[0].total;
-  const [byPct] = await Promise.all([
-    soda('5uac-w243', {'$select':'addr_pct_cd,count(*) as n','$group':'addr_pct_cd'})
-  ]);
-  // complaints per square mile by precinct, ranked (1 = densest)
   const areas = {};
   LAYERS.precinct.features.forEach(f => {
     const p = +f.properties.precinct;
     areas[p] = (areas[p]||0) + featureSqMi(f);
   });
+  crimeCache.areas = areas;
+  const byPct = await soda('5uac-w243', {'$select':'addr_pct_cd,count(*) as n','$group':'addr_pct_cd'}).catch(() => null);
+  if (!byPct){ crimeCache.pctRates = []; return crimeCache; }  // no precinct rank this time; not cached
+  // complaints per square mile by precinct, ranked (1 = densest)
   crimeCache.pctRates = byPct
     .filter(r => areas[+r.addr_pct_cd])
     .map(r => ({pct:+r.addr_pct_cd, rate: +r.n/areas[+r.addr_pct_cd]}))
     .sort((a,b)=>b.rate-a.rate);
-  crimeCache.areas = areas;
   crimeCache.ready = true;
   return crimeCache;
 }
 let _cityCrash = null;
 function cityCrashTotal(){
   if (!_cityCrash) _cityCrash = soda('h9gi-nx95',{'$select':'count(*) as n','$where':`crash_date > '${daysAgoISO(365)}'`})
-    .then(r=>+r[0].n).catch(()=>null);
+    .then(r=>+r[0].n).catch(()=>{ _cityCrash = null; return null; });
   return _cityCrash;
 }
 function fmtWindow(startISO, endISO){
@@ -2095,9 +2112,10 @@ async function fetchCrime(ctx){
   const sparkStart = new Date(new Date(base.end) - 380*86400000).toISOString().slice(0,10);
   const [rows, lastYear, sparkOld, sparkNew, cs, crash, cityCrash, crashMax] = await Promise.all([
     soda('5uac-w243', {'$select':'ofns_desc,law_cat_cd,count(*) as n','$where':wNow,'$group':'ofns_desc,law_cat_cd','$order':'n DESC','$limit':80}),
-    soda('qgea-i56i', {'$select':'count(*) as n','$where':`${wNow} AND rpt_dt between '${lastStart}T00:00:00' and '${lastEnd}T23:59:59'`}),
-    soda('qgea-i56i', {'$select':'date_trunc_ym(rpt_dt) as m,count(*) as n','$where':`${wNow} AND rpt_dt >= '${sparkStart}T00:00:00'`,'$group':'m'}),
-    soda('5uac-w243', {'$select':'date_trunc_ym(rpt_dt) as m,count(*) as n','$where':wNow,'$group':'m'}),
+    // everything past the current complaints is optional: one slow city query shouldn't blank the section
+    soda('qgea-i56i', {'$select':'count(*) as n','$where':`${wNow} AND rpt_dt between '${lastStart}T00:00:00' and '${lastEnd}T23:59:59'`}).catch(()=>null),
+    soda('qgea-i56i', {'$select':'date_trunc_ym(rpt_dt) as m,count(*) as n','$where':`${wNow} AND rpt_dt >= '${sparkStart}T00:00:00'`,'$group':'m'}).catch(()=>null),
+    soda('5uac-w243', {'$select':'date_trunc_ym(rpt_dt) as m,count(*) as n','$where':wNow,'$group':'m'}).catch(()=>null),
     compstatData(),
     soda('h9gi-nx95',{'$select':'count(*) as n, sum(number_of_persons_injured) as inj, sum(number_of_persons_killed) as killed',
       '$where':`within_circle(location, ${lat}, ${lng}, 250) AND crash_date > '${daysAgoISO(365)}'`}).catch(()=>null),
@@ -2106,7 +2124,7 @@ async function fetchCrime(ctx){
   ]);
   if (stale(ctx)||!$('crime')) return;
   const total = rows.reduce((s,x)=>s+ +x.n,0);
-  const prev = +(lastYear[0]?.n || 0);
+  const prev = lastYear ? +(lastYear[0]?.n || 0) : null;
   const fel = rows.filter(x=>x.law_cat_cd==='FELONY').reduce((s,x)=>s+ +x.n,0);
   const mis = rows.filter(x=>x.law_cat_cd==='MISDEMEANOR').reduce((s,x)=>s+ +x.n,0);
   // expected count for an average NYC area this size, same window
@@ -2121,8 +2139,8 @@ async function fetchCrime(ctx){
   const rank = myPct ? base.pctRates.findIndex(r=>r.pct===myPct)+1 : 0;
   // sparkline: merge months
   const months = {};
-  sparkOld.forEach(r => months[r.m.slice(0,7)] = +r.n);
-  sparkNew.forEach(r => months[r.m.slice(0,7)] = +r.n);
+  (sparkOld||[]).forEach(r => months[r.m.slice(0,7)] = +r.n);
+  (sparkNew||[]).forEach(r => months[r.m.slice(0,7)] = +r.n);
   const keys = Object.keys(months).sort().slice(-13);
   const maxV = Math.max(1, ...keys.map(k=>months[k]));
   const spark = keys.length >= 4 ? `<svg width="100%" height="46" viewBox="0 0 ${keys.length*14} 46" preserveAspectRatio="none" style="margin:6px 0 0">`+
@@ -2188,7 +2206,7 @@ async function fetchCrime(ctx){
     }).join('')+`</ul>
     <div class="note" style="margin:4px 0 8px">Precinct-wide weekly CompStat counts with change vs. the same dates last year; percent swings on small counts mean little.</div></div>`;
   }
-  h += `<div${areaAttr('c:500', 'Crime complaints: within 500 meters')}><div class="row"><span class="k">Complaints near this point vs. the same dates last year</span><span class="v" style="font-weight:700;${delta!=null&&delta>0?'color:#b3382c':delta!=null&&delta<0?'color:#1f7a4d':''}">${delta==null?'—':(delta>0?'+':'')+delta.toFixed(0)+'%'}<span class="meta">${fmt(prev)} then · ${fmt(total)} now</span></span></div>`;
+  h += `<div${areaAttr('c:500', 'Crime complaints: within 500 meters')}><div class="row"><span class="k">Complaints near this point vs. the same dates last year</span><span class="v" style="font-weight:700;${delta!=null&&delta>0?'color:#b3382c':delta!=null&&delta<0?'color:#1f7a4d':''}">${delta==null?'—':(delta>0?'+':'')+delta.toFixed(0)+'%'}<span class="meta">${prev==null ? `${fmt(total)} now · last year's figure didn't load from the city's data portal; reopen the point to retry` : `${fmt(prev)} then · ${fmt(total)} now`}</span></span></div>`;
   h += spark + `</div>`;
   h += `<div class="note">Counted by report date; the police department posts the complaint file quarterly, so its window is the latest covered. CompStat is precinct-wide and weekly; the complaint circle is hyper-local and quarterly.</div>`;
   $('crime').innerHTML = h;
@@ -2334,7 +2352,7 @@ function monthYear(iso){
    and say so rather than implying the window runs to today */
 const _feedMax = {};
 function feedMax(ds, col){
-  if (!_feedMax[ds]) _feedMax[ds] = soda(ds, {'$select':`max(${col}) as m`}).then(r=>r?.[0]?.m||null).catch(()=>null);
+  if (!_feedMax[ds]) _feedMax[ds] = soda(ds, {'$select':`max(${col}) as m`}).then(r=>r?.[0]?.m||null).catch(()=>{ delete _feedMax[ds]; return null; });
   return _feedMax[ds];
 }
 function feedLagNote(iso, maxDays){
