@@ -1343,7 +1343,7 @@ function snapshotBlock(lat, lng, nta, boro){
   return `<div class="snapshot">
     ${sentence ? `<p>${sentence}</p>` : ''}
     <div class="chips">${chips.join('')}</div>
-    <div class="note" style="margin:6px 0 0">Each figure is one real measurement against the citywide value — no composite scores. Tap a chip for the full picture and its caveats.</div>
+    <div class="note" style="margin:6px 0 0">Each figure is a single measurement against the citywide value; there are no composite scores. Tap a chip for the full picture and its caveats.</div>
   </div>`;
 }
 
@@ -2188,7 +2188,7 @@ async function fetchCrime(ctx){
         <div class="g" style="${+d.killed?'border-color:#b3382c':''}"><b style="${+d.killed?'color:#b3382c':''}">${fmt(d.killed)}</b><span>killed</span></div>
       </div>${crashLag?`<div class="note" style="margin:2px 0 0">${esc(crashLag.trim())}</div>`:''}</div>`;
   }
-  h += `<div class="note">${perRes ? PER_RESIDENT_CAVEAT + ' ' : ''}Complaint counts also reflect foot traffic and reporting behavior, and locations of sex crimes and some other offenses are withheld. Context, not a safety score.</div>`;
+  h += `<div class="note">${perRes ? PER_RESIDENT_CAVEAT + ' ' : ''}Complaint counts also reflect foot traffic and reporting behavior, and locations of sex crimes and some other offenses are withheld. Use them as context; they do not measure how safe a place is.</div>`;
 
   /* ---------- trends: which way it is heading ---------- */
   h += `<div class="subhead" style="margin-top:16px">Which way it's heading</div>`;
@@ -2291,7 +2291,7 @@ async function fetchChanging(ctx){
         if (show.length >= 4) break;
       }
       if (show.length) h += `<ul class="toplist">`+show.map(x=>`<li><span>${esc(x.addr)}<span class="sub">${x.job_type==='New Building'?'new building':'demolition'} · filed ${monthYear(x.filing_date)}</span></span></li>`).join('')+`</ul>`;
-      h += `<div class="note">Department of Buildings (DOB NOW) jobs first filed in the last 12 months, each counted once; later amendments to the same job are not counted again. Neighborhood-wide, not a radius. A filing is a plan, not a finished building.</div>`;
+      h += `<div class="note">Department of Buildings (DOB NOW) jobs first filed in the last 12 months, each counted once; later amendments to the same job are not counted again. Counts cover the whole neighborhood, and a filing is only a plan.</div>`;
       $('building').innerHTML = h;
     }).catch(()=>{ if(!stale(ctx)&&$('building')) $('building').innerHTML='<span class="errnote">Buildings feed unavailable right now.</span>'; });
   } else $('building').innerHTML = '';

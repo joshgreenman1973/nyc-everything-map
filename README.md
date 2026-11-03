@@ -2,7 +2,7 @@
 
 Live: https://joshgreenman1973.github.io/nyc-everything-map/
 
-Pick any point in the five boroughs of New York City, by address or by clicking the map, and get a report on it in ten chapters: the place (neighborhood, community district, what the city's gazetteer calls the spot, hurricane zone, flooding, air quality, street trees), who represents it (every elected official, plus how its election district voted in 2024 and 2025), living here (transit, groceries, restaurants, parks, schools, hospitals, worship, arts, 311, rats), safety (CompStat, crime complaints, crashes), the tax lot and housing, what's changing (new restaurants, building filings, licenses, film shoots), landmarks and lore, the neighborhood's census numbers and ranks, two-factor comparisons, and links to news and Reddit.
+Pick any point in the five boroughs of New York City, by address or by clicking the map, and get a report on it in ten chapters: the place (neighborhood, community district, what the city's gazetteer calls the spot, hurricane zone, flooding, air quality, street trees), who represents it (every elected official, plus how its election district voted in 2024 and 2025), living here (transit, groceries, restaurants, parks, schools, hospitals, worship, arts, 311, rats), safety (CompStat, crime complaints, crashes), the tax lot and housing, what's changing (new restaurants, building filings, licenses, film shoots), landmarks and lore, the neighborhood's census numbers and ranks, two-factor comparisons and links to news and Reddit.
 
 The full recipe, every source and every caveat is in [`docs/methodology.html`](docs/methodology.html). This file covers how the site is built and kept current.
 
@@ -23,7 +23,7 @@ The site is one static page, [`docs/index.html`](docs/index.html), on GitHub Pag
 - `scripts/`:
   - `build_data.sh` runs the whole pipeline, end to end.
   - `extract_officials.py` builds `officials.json`. Citywide and borough officials are entered by hand in this file.
-  - `extract_demographics.py` builds the old ACS 2016-2020 base; `refresh_acs2024.py` then rebuilds every neighborhood figure on ACS 2020-2024.
+  - `extract_demographics.py` builds the old American Community Survey (ACS) 2016-2020 base; `refresh_acs2024.py` then rebuilds every neighborhood figure on ACS 2020-2024.
   - `bake_extras.py` bakes the point files and extras: schools and school quality, landmarks, air quality, heat vulnerability, bus stops, election results (`elections()`, which ends by merging the 2024 presidential results in `pres24()`), the "Two factors" indicators (`nta_indicators()`), hospitals, The Neighborhoods links.
   - `bake_rankings.py` copies neighborhood ranks from the sibling `nyc-nta-rankings` project (a local clone next to this one).
   - `refresh_askingrents.py` rebakes StreetEasy median asking rents.
