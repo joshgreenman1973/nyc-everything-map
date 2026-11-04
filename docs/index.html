@@ -405,7 +405,7 @@ function tick(){
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '30'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '31'; // bump when files in data/ change, so cached copies refresh
 const FILE_P = {};   // file name -> promise that resolves once it is parsed into LAYERS or DATA
 function loadFile(f, isLayer, init, tries=2){
   return fetch(`data/${f}${isLayer ? '.topo' : ''}.json?v=${DATA_VERSION}`, init)
