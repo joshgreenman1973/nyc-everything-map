@@ -63,12 +63,25 @@ done
 python3 ../../scripts/extract_demographics.py  # writes nta_demographics.json + compare_geos.json (needs CENSUS_API_KEY)
 
 # ---------------------------------------------------------------- 4. subway
-curl -s "https://data.ny.gov/resource/39hk-dx4f.json?\$select=stop_name,daytime_routes,gtfs_latitude,gtfs_longitude&\$limit=600" -o subway_raw.json
+curl -s "https://data.ny.gov/resource/39hk-dx4f.json?\$select=station_id,stop_name,daytime_routes,gtfs_latitude,gtfs_longitude&\$limit=600" -o subway_raw.json
 python3 - <<'PY'
 import json
 d = json.load(open('subway_raw.json'))
-out = [[s['stop_name'], s['daytime_routes'], round(float(s['gtfs_latitude']),5), round(float(s['gtfs_longitude']),5)] for s in d]
+# The MTA file has one row per GTFS stop; three stations (145 St, W 4 St-Wash Sq,
+# Queensboro Plaza) carry two stop IDs at the same coordinates. One entry per
+# station_id, with both stops' routes, so a station never lists twice.
+by = {}
+for s in d:
+    k = s['station_id']
+    if k in by:
+        routes = by[k][1].split() + [r for r in s['daytime_routes'].split() if r not in by[k][1].split()]
+        by[k][1] = ' '.join(routes)
+    else:
+        by[k] = [s['stop_name'], s['daytime_routes'], round(float(s['gtfs_latitude']),5), round(float(s['gtfs_longitude']),5)]
+out = list(by.values())
+assert 480 < len(out) < 500, len(out)
 json.dump(out, open('subway.json','w'), ensure_ascii=False)
+print(len(d), 'stop rows ->', len(out), 'stations')
 PY
 
 # ------------------------------------------------- 4b. schools, landmarks, environment
