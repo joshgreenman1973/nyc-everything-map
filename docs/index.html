@@ -2547,7 +2547,8 @@ async function fetchLore(ctx){
    TV and comics who lived near the point. Rows: [id, character, work, medium, creator,
    year, lat, lon, radius_m, precision, kind]. Placed homes count within 500 meters;
    homes known only to a neighborhood, or at an invented address, count when their
-   rough circle covers the point. */
+   rough circle covers the point and is no wider than 2 km (wider circles mean only
+   "somewhere in the borough"). */
 const FICTION_URL = 'https://joshgreenman1973.github.io/nyc-fictional-homes/';
 const FICTION_PREC = {address_in_work:'address given in the work', building_in_work:'building or corner named in the work',
   creator_stated:'address given by its creator', screen_exterior:'building shown on screen', block_inferred:'street or block only',
@@ -2561,7 +2562,7 @@ function fictionalBlock(lat, lng){
   const dedupe = list => { const seen = new Set(); return list.filter(x => { const k = x.who + '|' + x.work; if (seen.has(k)) return false; seen.add(k); return true; }); };
   const near = dedupe(all.filter(x => !loose(x.prec) && x.d <= 500).sort((a,b) => a.d - b.d));
   const listed = new Set(near.map(x => x.who + '|' + x.work));
-  const area = dedupe(all.filter(x => loose(x.prec) && x.d <= x.radius && !listed.has(x.who + '|' + x.work)).sort((a,b) => a.radius - b.radius || a.d - b.d));
+  const area = dedupe(all.filter(x => loose(x.prec) && x.radius <= 2000 && x.d <= x.radius && !listed.has(x.who + '|' + x.work)).sort((a,b) => a.radius - b.radius || a.d - b.d));
   const credit = x => `${esc(x.work)} (${[FICTION_MEDIUM[x.medium], x.creator, x.year].filter(Boolean).map(esc).join(', ')})`;
   const link = x => `<a href="${FICTION_URL}#${esc(x.id)}" target="_blank" rel="noopener">${esc(x.who)}</a>`;
   let h = `<div${areaAttr('c:500', 'Fictional homes: within 500 meters')}><div class="subhead">Fictional New Yorkers who lived nearby</div>`;
@@ -2575,7 +2576,7 @@ function fictionalBlock(lat, lng){
     const shown = area.slice(0,4);
     h += row(`Set around here, without an exact address`, `${fmt(area.length)}<span class="meta">${shown.map(x => `${link(x)}, ${esc(x.work)}${x.prec === 'invented' ? ' (invented address)' : ''}`).join(' · ')}${area.length > shown.length ? ` · and ${fmt(area.length - shown.length)} more` : ''}</span>`);
   }
-  h += `<div class="note">From <a href="${FICTION_URL}" target="_blank" rel="noopener">Fictional New Yorkers at home</a>, a map of where characters in books, plays, film, TV and comics lived, each placed from a quoted source. A building shown on screen is the real building filmed as the home, and the story may put the home somewhere else. Homes known only to a neighborhood, or at an address that does not exist, are counted when their rough circle covers this point.</div></div>`;
+  h += `<div class="note">From <a href="${FICTION_URL}" target="_blank" rel="noopener">Fictional New Yorkers at home</a>, a map of where characters in books, plays, film, TV and comics lived, each placed from a quoted source. A building shown on screen is the real building filmed as the home, and the story may put the home somewhere else. Homes known only to a neighborhood, or at an address that does not exist, are counted when this point falls inside their rough circle, if that circle reaches no more than 2 kilometers.</div></div>`;
   return h;
 }
 
