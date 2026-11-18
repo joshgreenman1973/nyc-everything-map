@@ -360,7 +360,7 @@ ul.toplist .sub{display:block; font-size:11.5px; color:#8a8f9e; font-weight:400}
 <button id="aicaution">⚠ AI caution</button>
 <div id="aipop">
   <h4>Read this before you rely on the map</h4>
-  This site was built with AI assistance. Quality checks that were done: boundary lookups were validated against about 900 police complaint records and about 900 recent 311 records, with simplification error under 0.3% (nearly all remaining mismatches are records the city itself labels differently, or points sitting exactly on a boundary line); every elected official was checked against an official or maintained public source in June 2026; demographic figures were spot-checked against published American Community Survey tables. Quality checks that were <b>not</b> done: not every possible lookup has been human-reviewed, live feeds are shown as the city publishes them, school data carries the vintages noted in each section and zoned school assignments change. Verify anything consequential with the agency itself. <a href="methodology.html">Full methodology</a>.
+  This site was built with AI assistance. Quality checks that were done: boundary lookups were validated against about 900 police complaint records and about 900 recent 311 records, with simplification error under 0.3% (nearly all remaining mismatches are records the city itself labels differently, or points sitting exactly on a boundary line); every elected official was checked against an official or maintained public source, most recently on Nov. 18, 2026; demographic figures were spot-checked against published American Community Survey tables. Quality checks that were <b>not</b> done: not every possible lookup has been human-reviewed, live feeds are shown as the city publishes them, school data carries the vintages noted in each section and zoned school assignments change. Verify anything consequential with the agency itself. <a href="methodology.html">Full methodology</a>.
 </div>
 <a id="methlink" href="methodology.html">Methodology</a>
 
@@ -397,7 +397,7 @@ const LAYERS = {}, DATA = {};
 // quantized to about half a meter, well inside the 2 meter simplification).
 const CORE_LAYERS = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic'];
 const LATE_LAYERS = ['elections','tracts','hoods_alt','hoods_whong','puma'];
-const CORE_DATA = ['officials','nta_demographics','compare_geos','subway','schools','airquality','hvi','hospitals','colleges','libraries','supermarkets','askingrents','parks'];
+const CORE_DATA = ['cityextent','officials','nta_demographics','compare_geos','subway','schools','airquality','hvi','hospitals','colleges','libraries','supermarkets','askingrents','parks'];
 const LATE_DATA = ['restaurants','commonplace','busstops','play','artsvenues','publicart','worship','rankings','tract_context','landmarks','neighborhoods_project','transit45','languages'];
 let loaded = 0, totalFiles = CORE_LAYERS.length + LATE_LAYERS.length + CORE_DATA.length + LATE_DATA.length;
 function tick(){
@@ -405,7 +405,7 @@ function tick(){
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '33'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '34'; // bump when files in data/ change, so cached copies refresh
 const FILE_P = {};   // file name -> promise that resolves once it is parsed into LAYERS or DATA
 function loadFile(f, isLayer, init, tries=2){
   return fetch(`data/${f}${isLayer ? '.topo' : ''}.json?v=${DATA_VERSION}`, init)
@@ -785,7 +785,7 @@ function updateChapbar(){
 
 /* ============================== helpers ============================== */
 const fmt = n => n==null ? '—' : (+n).toLocaleString('en-US');
-const money = n => n==null ? '—' : '$' + (+n).toLocaleString('en-US');
+const money = n => n==null ? '—' : '$' + Math.round(+n).toLocaleString('en-US');
 const pct = n => n==null ? '—' : (+n).toFixed(1) + '%';
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function partyTag(p){
@@ -800,7 +800,15 @@ function haversine(lat1,lon1,lat2,lon2){
   return 2*R*Math.asin(Math.sqrt(a));
 }
 function walkmin(m){ return Math.max(1, Math.round(m/80)); }
-function daysAgoISO(days){ return new Date(Date.now()-days*86400000).toISOString().slice(0,10)+'T00:00:00'; }
+/* midnight, New York time, N days ago. City feeds store floating local timestamps, so the date has to be the
+   New York calendar date (toISOString() is UTC and jumps a day ahead every evening). Use with >= so the first day counts. */
+/* AP-style dates: "Sept. 30, 2026"; March through July are never abbreviated */
+const AP_MON = ['Jan.','Feb.','March','April','May','June','July','Aug.','Sept.','Oct.','Nov.','Dec.'];
+function apDay(d, withYear=true){ return `${AP_MON[d.getMonth()]} ${d.getDate()}${withYear?', '+d.getFullYear():''}`; }
+/* source files carry bare domains ("www.columbia.edu/"), which a browser treats as a path on this site */
+function webUrl(u){ u = String(u||'').trim(); return /^https?:\/\//i.test(u) ? u : 'https://' + u.replace(/^\/+/, ''); }
+function plural(n, one, many){ return `${fmt(n)} ${n===1?one:many}`; }
+function daysAgoISO(days){ return new Date(Date.now()-days*86400000).toLocaleDateString('en-CA',{timeZone:'America/New_York'})+'T00:00:00'; }
 function row(k,v,layerKey=null){
   return `<div class="row${layerKey?' hl':''}"${layerKey?` data-layer="${layerKey}"`:''}><span class="k">${k}</span><span class="v">${v}</span></div>`;
 }
@@ -884,9 +892,42 @@ const LINECOLORS = {'1':'#EE352E','2':'#EE352E','3':'#EE352E','4':'#00933C','5':
 
 /* ============================== inspect ============================== */
 let current = null;
+/* inside the city's legal limits, waters included (the harbor, the bays, the rivers up to the state line).
+   A bare bounding box let Hoboken, Yonkers and Valley Stream through, and they got a full report with
+   the mayor as their representative. Any point inside a neighborhood counts too, so the simplified
+   outline can never wrongly turn away an address on the city line. */
+function inCity(lat, lng){
+  if (lat<40.46 || lat>40.95 || lng<-74.30 || lng>-73.65) return false;
+  const ext = DATA.cityextent?.features?.[0];
+  if (!ext) return true;
+  return featContains(ext, lng, lat) || !!lookup(LAYERS.nta, lat, lng);
+}
+/* Community district row. The name has to come from the district the point is actually in (boro_cd),
+   not from the neighborhood's census grouping: a neighborhood can straddle a district line, which once
+   printed "Brooklyn CD 2 · Park Slope-Carroll Gardens" (that is CD 6's name). Codes 26-28, 55-56, 64,
+   80-84 and 95 are joint interest areas (big parks, airports, Rikers-style sites) that belong to no
+   community district or board. */
+let _cdNames = null;
+function cdNames(){
+  if (_cdNames) return _cdNames;
+  _cdNames = {};
+  const B = {MN:1, BX:2, BK:3, QN:4, SI:5};
+  (LAYERS.nta?.features||[]).forEach(f => {
+    const m = /^(MN|BX|BK|QN|SI)(\d\d)\s(.*?)\s\((CD|JIA) \d+ (Equivalent|Approximation)\)$/.exec(f.properties.cdtaname||'');
+    if (m) _cdNames[String(B[m[1]]*100 + +m[2])] = {name:m[3], jia:m[4]==='JIA'};
+  });
+  return _cdNames;
+}
+function cdRow(cdCode){
+  const n = +String(cdCode).slice(1), boroName = BORO_NAMES[String(cdCode)[0]] || '';
+  const info = cdNames()[String(+cdCode)];
+  if (info?.jia || n > 18) return row('Community district', `None<span class="meta">${esc(info?.name || 'This area')} is a joint interest area — a large park, airport or other public site that belongs to no community district or board</span>`, 'cd');
+  return row('Community district', `${esc(boroName)} CD ${n}<span class="meta">Community Board ${n}${info?' · '+esc(info.name):''}</span>`, 'cd');
+}
+const BORO_NAMES = {1:'Manhattan', 2:'Bronx', 3:'Brooklyn', 4:'Queens', 5:'Staten Island'};
 async function inspect(lat, lng, geoFeature=null){
   await coreReady;
-  if (lat<40.46 || lat>40.95 || lng<-74.30 || lng>-73.65){ alert('That point is outside New York City.'); return; }
+  if (!inCity(lat, lng)){ alert('That point is outside New York City. The map covers the five boroughs, including their waters.'); return; }
   current = {lat,lng};
   _feat = {};
   unpinShape(); unpinPoi(); clearArea();
@@ -907,13 +948,16 @@ async function inspect(lat, lng, geoFeature=null){
 
   let rev = geoFeature, revFailed = false, geoOsm = false;
   if (!rev){ const rr = await reverse(lat,lng); rev = rr.f; revFailed = rr.failed; geoOsm = !!rr.osm; }
-  const props = rev?.properties || {};
-  const bbl = props.addendum?.pad?.bbl || null;
   let revDist = null;
   if (rev && !geoFeature){
     const [rlng,rlat] = rev.geometry.coordinates;
     revDist = haversine(lat,lng,rlat,rlng);
+    // far out in the water the geocoder falls back to a country- or state-level answer ("United States")
+    // thousands of kilometers off; an "address" that far away describes nothing, so drop it
+    if (revDist > 1500){ rev = null; revDist = null; }
   }
+  const props = rev?.properties || {};
+  const bbl = props.addendum?.pad?.bbl || null;
 
   const nta=lookup(LAYERS.nta,lat,lng), cd=lookup(LAYERS.cd,lat,lng), cc=lookup(LAYERS.council,lat,lng),
     pp=lookup(LAYERS.precinct,lat,lng), sd=lookup(LAYERS.schooldist,lat,lng), es=lookup(LAYERS.eszones,lat,lng),
@@ -945,7 +989,7 @@ async function inspect(lat, lng, geoFeature=null){
     ${later(['commonplace'], hereHtml, '')}
     <div class="sub">${nta ? `<b style="color:#fff">${esc(nta.properties.ntaname)}</b> · ` : ''}${subBits}<span id="elev"></span></div>
     ${geoOsm ? `<div class="nearnote">City geocoder is down — address from OpenStreetMap; tax-lot details unavailable until it is back.</div>` : ''}
-    ${revDist!=null && revDist>40 ? `<div class="nearnote">Nearest address point, ${Math.round(revDist)} meters from where you clicked</div>` : ''}
+    ${revDist!=null && revDist>40 && revDist<=1500 ? `<div class="nearnote">Nearest address point, ${fmt(Math.round(revDist))} meters from where you clicked</div>` : ''}
     <div class="actions"><button id="copylink">Copy link</button>
       <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}" target="_blank" rel="noopener">Street View ↗</a>
       <button id="comparebtn">⇄ Compare</button>
@@ -971,14 +1015,13 @@ async function inspect(lat, lng, geoFeature=null){
   const hood = nta ? nta.properties.ntaname.split('-')[0].split('(')[0].trim() : (boro || 'New York City');
   html += `<section class="blk" id="sec-place"><h3><span class="num">1</span> The place</h3>`;
   if (nta){
-    const cdtaName = (nta.properties.cdtaname||'').replace(/^\w+\d+\s/,'').replace(/\s\(CD \d+ (Equivalent|Approximation)\)/,'');
     html += row('Neighborhood', `${esc(nta.properties.ntaname)}<span class="meta">Neighborhood tabulation area ${esc(nta.properties.nta2020)}</span>`, 'nta');
     html += later(['hoods_alt','hoods_whong'], () => {
       const alts = altNeighborhoods(lat, lng, nta, props);
       return alts.length ? `<div class="note" style="margin:-2px 0 8px">Other maps put this spot in <b>${alts.map(esc).join('</b> or <b>')}</b> — neighborhood borders are unofficial, and every map draws them differently.</div>` : '';
     }, '');
     html += row('Borough', esc(boro));
-    if (cd) html += row('Community district', `${esc(boro)} CD ${+cdCode.slice(1)}<span class="meta">Community Board ${+cdCode.slice(1)}${cdtaName?' · '+esc(cdtaName):''}</span>`, 'cd');
+    if (cd) html += cdRow(cdCode);
   } else {
     html += `<div class="errnote">This point is not inside any neighborhood boundary — it is probably in the water. Showing whatever still applies.</div>`;
   }
@@ -1039,7 +1082,7 @@ async function inspect(lat, lng, geoFeature=null){
     ['https://findmypollsite.vote.nyc/', 'Find your poll site'],
     ['https://vote.nyc/', 'Register to vote'],
   ]);
-  html += `<div class="note">Officeholders verified September 2026, from the City Council, the unitedstates legislators project and Open States.</div></section>`;
+  html += `<div class="note">Officeholders verified Nov. 18, 2026, against the City Council, House, State Senate and Assembly rosters. These are the people holding each seat now: winners of the Nov. 3, 2026, election take office Jan. 1, 2027 (State Legislature) and Jan. 3 (Congress).</div></section>`;
 
   /* ----- 3 · living here ----- */
   html += `<section class="blk" id="sec-living"><h3><span class="num">3</span> Living here</h3>`;
@@ -1055,7 +1098,7 @@ async function inspect(lat, lng, geoFeature=null){
   html += zoneRow('Zoned elementary', es?.properties, 'eszones');
   if (ms?.properties.label) html += zoneRow('Zoned middle school', ms.properties, 'mszones');
   html += nearestSchools(lat,lng) + `
-  <div class="note" style="margin-bottom:4px">Zones are 2024-2025; locations are the Department of Education's latest published point file (2019-20) with 2021-22 enrollment; reading and math proficiency are the 2023 state tests and graduation rates are the class of 2023 — confirm with MySchools before enrolling. School links go to the DOE page; "profile" links go to InsideSchools.</div>`;
+  <div class="note" style="margin-bottom:4px">Zones are 2024-2025; locations are the Department of Education's latest published point file (2019-20) with 2025-26 enrollment; reading and math proficiency are the 2026 state tests and graduation rates are the class of 2025 (four-year, June), all from the Department of Education's InfoHub; schools with no 2025-26 enrollment, most of them closed or merged, are left out — confirm with MySchools before enrolling. School links go to the DOE page; "profile" links go to InsideSchools.</div>`;
   html += `<div class="subhead">Colleges nearby</div>` + collegeHtml(lat,lng);
   html += `<div class="subhead">Health</div>` + hospitalHtml(lat,lng);
   html += `<div class="subhead">Faith</div>` + later(['worship'], () => worshipHtml(lat,lng));
@@ -1194,15 +1237,15 @@ function renderCompare(A, B){
 
 /* ============================== crossed (bivariate) indicators ============================== */
 const BIV_PRESETS = [
-  {name:'Income × violent street crime', a:['Median income', d=>d.median_hh_income, money], b:['Violent crime per 1,000 residents', d=>d.pop>200&&d.vcrime_n!=null?d.vcrime_n/d.pop*1000:null, v=>v.toFixed(1)], note:'Crime: outdoor assault, robbery and murder, Jan 2024 to Mar 2026.'},
-  {name:'Density × air quality', a:['People per square mile', d=>d.density, fmt], b:['Fine particles (PM2.5)', d=>d.pm25, v=>v+' µg/m³'], note:'Air quality is the surrounding community district\'s 2023 annual average.'},
-  {name:'Rent burden × evictions', a:['Rent burdened households', d=>d.rent_burdened_pct, pct], b:['Evictions per 1,000 renter households', d=>d.renter_occ>100&&d.evic_n!=null?d.evic_n/d.renter_occ*1000:null, v=>v.toFixed(1)], note:'Marshal-executed evictions, last 24 months — filings are far more numerous.'},
+  {name:'Income × violent street crime', a:['Median income', d=>d.median_hh_income, money], b:['Violent crime per 1,000 residents', d=>d.pop>200&&d.vcrime_n!=null?d.vcrime_n/d.pop*1000:null, v=>v.toFixed(1)], note:'Crime: outdoor assault, robbery and murder reported Jan. 1, 2024, to Sept. 30, 2026.'},
+  {name:'Density × air quality', a:['People per square mile', d=>d.density, fmt], b:['Fine particles (PM2.5)', d=>d.pm25, v=>v+' µg/m³'], note:'Air quality is the surrounding community district\'s 2024 annual average.'},
+  {name:'Rent burden × evictions', a:['Rent burdened households', d=>d.rent_burdened_pct, pct], b:['Evictions per 1,000 renter households', d=>d.renter_occ>100&&d.evic_n!=null?d.evic_n/d.renter_occ*1000:null, v=>v.toFixed(1)], note:'Marshal-executed evictions, Nov. 17, 2024, to Nov. 16, 2026 — filings are far more numerous.'},
   {name:'Rent stabilization × evictions', a:['Rent-stabilized units per 100 renter households', d=>d.renter_occ>100&&d.rs_units!=null?Math.min(100,d.rs_units/d.renter_occ*100):null, v=>v.toFixed(0)], b:['Evictions per 1,000 renter households', d=>d.renter_occ>100&&d.evic_n!=null?d.evic_n/d.renter_occ*1000:null, v=>v.toFixed(1)], note:'Stabilized counts are administrative (mid-2025, via JustFix); where new stabilized buildings outpace survey renter counts the share is capped at 100.'},
-  {name:'Poverty × children', a:['Below poverty line', d=>d.poverty_pct, pct], b:['Children under 18', d=>d.under18_pct ?? d.under18_pct_calc, pct], note:'Where both are high, child poverty concentrates.'},
-  {name:'Foreign born × limited English', a:['Foreign born', d=>d.foreign_born_pct, pct], b:['Limited English', d=>d.limited_english_pct, pct], note:'High-high areas need language access in city services most.'},
-  {name:'New construction × rent', a:['New buildings filed per square mile', d=>d.land_sqmi?d.newbuild_n/d.land_sqmi:null, v=>v.toFixed(1)], b:['Median gross rent', d=>d.median_rent, money], note:'New-building jobs first filed June 11, 2025 to June 8, 2026, each counted once (later amendments are not counted again); rent is the 2020-2024 survey.'},
-  {name:'Seniors × poverty', a:['Seniors (65 and over)', d=>d.age65pl_pct ?? d.senior_pct_calc, pct], b:['Below poverty line', d=>d.poverty_pct, pct], note:'Where both are high, older New Yorkers are aging in place with thin resources.'},
-  {name:'Income × education', a:['Median income', d=>d.median_hh_income, money], b:["Bachelor's degree or higher", d=>d.bachelors_plus_pct, pct], note:'Off-diagonal neighborhoods — educated but lower-income or the reverse — are the interesting ones.'},
+  {name:'Poverty × children', a:['Below poverty line', d=>d.poverty_pct, pct], b:['Children under 18', d=>d.under18_pct ?? d.under18_pct_calc, pct], note:'Both are census survey shares of the neighborhood\'s residents.'},
+  {name:'Foreign born × limited English', a:['Foreign born', d=>d.foreign_born_pct, pct], b:['Limited English', d=>d.limited_english_pct, pct], note:'Limited English means speaking English less than "very well"; both are census survey shares.'},
+  {name:'New construction × rent', a:['New buildings filed per square mile', d=>d.land_sqmi?d.newbuild_n/d.land_sqmi:null, v=>v.toFixed(1)], b:['Median gross rent', d=>d.median_rent, money], note:'New-building jobs first filed Nov. 18, 2025, to Nov. 17, 2026, each counted once (later amendments are not counted again); rent is the 2020-2024 survey.'},
+  {name:'Seniors × poverty', a:['Seniors (65 and over)', d=>d.age65pl_pct ?? d.senior_pct_calc, pct], b:['Below poverty line', d=>d.poverty_pct, pct], note:'Poverty here is the share of all residents, not of seniors alone.'},
+  {name:'Income × education', a:['Median income', d=>d.median_hh_income, money], b:["Bachelor's degree or higher", d=>d.bachelors_plus_pct, pct], note:'Education is the share of adults 25 and over with a bachelor\'s degree or more.'},
 ];
 const BIV_COLORS = ['#e8e8e8','#ace4e4','#5ac8c8','#dfb0d6','#a5add3','#5698b9','#be64ac','#8c62aa','#3b4994'];
 const TIERTHIRD = ['bottom third','middle third','top third'];
@@ -1288,7 +1331,8 @@ function ratioWord(r, hi, lo){
 }
 function snapshotBlock(lat, lng, nta, boro){
   const D = nta ? DATA.nta_demographics[nta.properties.nta2020] : null;
-  if (!D || !D.pop || D.pop < 200) return '';
+  // only residential neighborhoods (type 0): a summary of Rikers Island or an airport as a place to live misleads
+  if (!D || !D.pop || D.pop < 200 || (nta.properties.ntatype && nta.properties.ntatype !== '0')) return '';
   const CITY = DATA.compare_geos.NYC;
   const chips = [];
   const chip = (sec, label, value) => chips.push(`<a data-sec="${sec}"><span>${label}</span><b>${value}</b></a>`);
@@ -1304,7 +1348,7 @@ function snapshotBlock(lat, lng, nta, boro){
     let rc = 0; for (const p of DATA.restaurants.pts){ if (haversine(lat,lng,p[0],p[1]) <= 800) rc++; }
     return rc ? `<a data-sec="sec-living"><span>Restaurants ≤10 min</span><b>${fmt(rc)}</b></a>` : '';
   }, ''));
-  // crime rate vs city (NTA-level, 2024-Mar 2026 violent street crime)
+  // crime rate vs city (NTA-level violent street crime, VCRIME_WINDOW); the Safety chapter explains it
   const cr = cityVcrimeRate();
   if (cr && D.vcrime_n != null){
     chip('sec-safety','Violent street crime', ((D.vcrime_n/D.pop*1000)/cr).toFixed(1)+'× city rate');
@@ -1381,7 +1425,7 @@ async function fetchElevation(lat,lng){
 /* ---------- nearest schools (static) ---------- */
 function nearestSchools(lat,lng){
   const near = DATA.schools.map(s => ({dbn:s[0],name:s[1],lat:s[2],lng:s[3],enr:s[4],span:s[5],ela:s[6],math:s[7],grad:s[8],d:haversine(lat,lng,s[2],s[3])}))
-    .filter(s => s.span || s.enr != null) // drop DOE offices, adult learning centers, home instruction — file rows with no grades and no enrollment
+    .filter(s => s.span || s.enr) // drop DOE offices, adult learning centers, home instruction and schools with no current enrollment (closed or merged)
     .sort((a,b)=>a.d-b.d).slice(0,5);
   if (!near.length) return '';
   return `<ul class="toplist">` + near.map(s => {
@@ -1460,9 +1504,9 @@ function collegeHtml(lat,lng){
   const miles = m => m < 1100 ? walkmin(m) + ' min walk' : (m/1609.34).toFixed(1) + ' mi';
   return `<ul class="toplist">` + near.map(c =>
     `<li class="poi" data-lat="${c.lat}" data-lng="${c.lng}" data-name="${esc(c.name)}">
-      <span>${c.url?`<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.name)}</a>`:esc(c.name)}<span class="sub">${c.total?fmt(c.total)+' students · ':''}${esc(c.control.toLowerCase())}</span></span>
+      <span>${c.url?`<a href="${esc(webUrl(c.url))}" target="_blank" rel="noopener">${esc(c.name)}</a>`:esc(c.name)}<span class="sub">${c.total?fmt(c.total)+' students · ':''}${esc(c.control.toLowerCase())}</span></span>
       <span class="n">${miles(c.d)}</span></li>`).join('') + `</ul>
-    <div class="note" style="margin:0 0 6px">From the college map's 173 campuses; enrollment is fall 2022 federal data, the latest compiled there.</div>`;
+    <div class="note" style="margin:0 0 6px">From the college map's campus list; enrollment is fall 2024 federal data (IPEDS, via the Urban Institute). Campuses that reported no fall 2024 enrollment, most of them closed, are left out.</div>`;
 }
 function supermarketHtml(lat,lng){
   const near = DATA.supermarkets.map(s => ({name:s[0], lat:s[1], lng:s[2], d:haversine(lat,lng,s[1],s[2])}))
@@ -1471,7 +1515,7 @@ function supermarketHtml(lat,lng){
   return `<ul class="toplist">`+near.map(s =>
     `<li class="poi" data-lat="${s.lat}" data-lng="${s.lng}" data-name="${esc(s.name)}">
       <span>${esc(s.name)}</span><span class="n">${walkmin(s.d)} min</span></li>`).join('')+`</ul>
-    <div class="note" style="margin:0 0 6px">Real supermarkets only: 951 stores from the state's licensed retail-food file, kept when they match a known supermarket operator or carry "supermarket" in their name — the raw file lists every licensed food retailer, breweries and bodegas included, so a name-and-chain filter beats trusting the category. Independents named like delis may be missed.</div>`;
+    <div class="note" style="margin:0 0 6px">Real supermarkets only: ${fmt(DATA.supermarkets.length)} stores from the state's licensed retail-food file, kept when they match a known supermarket operator or carry "supermarket" in their name — the raw file lists every licensed food retailer, breweries and bodegas included, so a name-and-chain filter beats trusting the category. Independents named like delis may be missed.</div>`;
 }
 // what is on the plate within a short walk — counts and character from the restaurant-cuisine dataset
 const CUISINE_GENERIC = new Set(['', 'Other', 'Not Listed/Not Applicable']);
@@ -1606,13 +1650,18 @@ async function show45Reach(ctx){
 const R45STYLE = {stroke:false, fillColor:'#5698b9', fillOpacity:.25, interactive:false};
 
 function parkDistance(f, lat, lng){
-  // 0 if inside; otherwise distance to the nearest boundary vertex (~20 m vertex spacing)
+  // 0 if inside; otherwise distance to the nearest point on the outline (segments, not just corners, so a
+  // long straight park edge doesn't read farther than it is). Local flat projection, fine at these scales.
   if (featContains(f, lng, lat)) return 0;
+  const kx = 111320*Math.cos(lat*Math.PI/180), ky = 110540;
   let best = Infinity;
   const rings = f.geometry.type === 'Polygon' ? f.geometry.coordinates : f.geometry.coordinates.flat();
   for (const ring of rings)
-    for (const [x,y] of ring){
-      const d = haversine(lat, lng, y, x);
+    for (let i = 1; i < ring.length; i++){
+      const ax = (ring[i-1][0]-lng)*kx, ay = (ring[i-1][1]-lat)*ky, bx = (ring[i][0]-lng)*kx, by = (ring[i][1]-lat)*ky;
+      const dx = bx-ax, dy = by-ay, L2 = dx*dx+dy*dy;
+      const t = L2 ? Math.max(0, Math.min(1, -(ax*dx+ay*dy)/L2)) : 0;
+      const d = Math.hypot(ax+t*dx, ay+t*dy);
       if (d < best) best = d;
     }
   return best;
@@ -1659,7 +1708,7 @@ function playHtml(lat,lng){
     `<li class="poi" data-lat="${x.lat}" data-lng="${x.lng}" data-name="${esc(x.name)}">
       <span>${esc(x.name)}<span class="sub">${esc(x.kind)}${x.sports?' · '+esc(x.sports.replace(/,/g,', ')):''}</span></span>
       <span class="n">${walkmin(x.d)} min</span></li>`).join('')+`</ul>`;
-  h += `<div class="note" style="margin:0 0 6px">Parks are real park land (parks department property map, plazas and strips excluded), measured to the park's edge. Play spots are the playground explorer's 6,735 playgrounds, courts, spray showers, pools and recreation centers. Straight-line walk times; entrances can add a block or two.</div>`;
+  h += `<div class="note" style="margin:0 0 6px">Parks are real park land from the parks department's property map, triangles and plazas included and malls, strips and parkways left out, measured to the nearest point on the park's edge. Play spots are the playground explorer's 6,735 playgrounds, courts, spray showers, pools and recreation centers. Straight-line walk times; entrances can add a block or two.</div>`;
   return h;
 }
 function libraryHtml(lat,lng){
@@ -1685,7 +1734,7 @@ function artsHtml(lat,lng){
   if (!picks.length) return `<div class="note" style="margin:0 0 6px">No venue from the arts map within about a 20 minute walk.</div>`;
   return `<ul class="toplist">`+picks.map(x =>
     `<li class="poi" data-lat="${x.lat}" data-lng="${x.lng}" data-name="${esc(x.name)}">
-      <span>${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.name)}</a>`:esc(x.name)}<span class="sub">${esc(x.cat.replace('_',' '))}</span></span>
+      <span>${x.url?`<a href="${esc(webUrl(x.url))}" target="_blank" rel="noopener">${esc(x.name)}</a>`:esc(x.name)}<span class="sub">${esc(x.cat.replace('_',' '))}</span></span>
       <span class="n">${walkmin(x.d)} min</span></li>`).join('')+`</ul>
     <div class="note" style="margin:0 0 8px">From the arts map's 2,119 curated venues — galleries, theaters, museums, libraries, bookstores, music and more, capped at two per category for variety.</div>`;
 }
@@ -1809,45 +1858,70 @@ function askingRent(nta){
 }
 async function fetchSales(ctx, boroId, block){
   try{
-    const rows = await soda('usep-8jbt', {'$select':'address,sale_price,sale_date,building_class_category',
-      '$where':`borough='${boroId}' AND block::number between ${block-5} and ${block+5} AND sale_price::number > 10000`,
-      '$order':'sale_date DESC','$limit':200});
+    // The sales file has no coordinates, and tax-block numbers are not spatial (blocks 1118 and 1113 in
+    // Brooklyn are two miles apart), so find the blocks that actually lie within about 400 meters from
+    // PLUTO's lot centroids, then pull sales on those blocks.
+    const {lat,lng} = ctx;
+    const dy = 0.0036, dx = 0.0047; // ~400 m box
+    const blks = await soda('64uk-42ks', {'$select':'block','$group':'block','$limit':1000,
+      '$where':`borocode='${boroId}' AND latitude::number between ${lat-dy} and ${lat+dy} AND longitude::number between ${lng-dx} and ${lng+dx}`});
     if (stale(ctx) || !$('sales')) return;
-    if (!rows.length){ $('sales').innerHTML = row('Property sales within ~5 blocks, last 12 months','None recorded'); return; }
-    const prices = rows.map(r=>+r.sale_price).sort((a,b)=>a-b);
-    const median = prices[Math.floor(prices.length/2)];
+    const list = [...new Set(blks.map(b=>+b.block).filter(Number.isFinite).concat(block ? [+block] : []))];
     let h = '';
     const ar = askingRent(ctx.nta);
     if (ar) h += row('Median asking rent', `${money(ar.rent)}<span class="meta">${esc(ar.area)}, ${esc(ar.month)} (StreetEasy listings). Asking rent is what vacant units list for — most tenants, especially in stabilized units, pay less than this.</span>`);
-    h += row('Property sales within ~5 blocks, last 12 months', `${fmt(rows.length)}<span class="meta">median ${money(median)} (all property types mixed)</span>`);
-    h += `<ul class="toplist">`+rows.slice(0,3).map(r=>`<li><span>${esc(niceAddress(titleWords(r.address)))}<span class="sub">${esc((r.building_class_category||'').replace(/^\d+\s*/,'').toLowerCase())}</span></span><span class="n">${money(r.sale_price)}<span class="sub" style="text-align:right">${monthYear(r.sale_date)}</span></span></li>`).join('')+`</ul>`;
-    h += `<div class="note">Department of Finance rolling sales, deed transfers under $10,000 excluded. "Blocks" are tax blocks adjacent in number, which usually but not always means nearby.</div>`;
+    const label = 'Property sales within about 400 meters';
+    if (!list.length){ $('sales').innerHTML = h + row(label,'None recorded'); return; }
+    const where = `borough='${boroId}' AND block::number in(${list.join(',')}) AND sale_price::number > 10000`;
+    const [agg, rows, win] = await Promise.all([
+      soda('usep-8jbt', {'$select':'count(*) as n, median(sale_price::number) as med','$where':where}),
+      soda('usep-8jbt', {'$select':'address,sale_price,sale_date,building_class_category','$where':where,'$order':'sale_date DESC','$limit':3}),
+      salesWindow(),
+    ]);
+    if (stale(ctx) || !$('sales')) return;
+    const n = +(agg?.[0]?.n || 0);
+    const span = win ? `, ${win}` : '';
+    if (!n){ $('sales').innerHTML = h + row(label + span,'None recorded'); return; }
+    h += row(label + span, `${fmt(n)}<span class="meta">median ${money(+agg[0].med)} (all property types mixed)</span>`);
+    h += `<ul class="toplist">`+rows.map(r=>`<li><span>${esc(niceAddress(titleWords(r.address)))}<span class="sub">${esc((r.building_class_category||'').replace(/^\d+\s*/,'').toLowerCase())}</span></span><span class="n">${money(r.sale_price)}<span class="sub" style="text-align:right">${monthYear(r.sale_date)}</span></span></li>`).join('')+`</ul>`;
+    h += `<div class="note">Department of Finance rolling sales, which cover the latest 12 months the department has published; deed transfers of $10,000 or less are excluded. "Within about 400 meters" means on a tax block with at least one lot centered in a box about 400 meters out from this point.</div>`;
     $('sales').innerHTML = h;
   }catch(e){ if(!stale(ctx)&&$('sales')) $('sales').innerHTML=''; }
+}
+/* the rolling-sales file's own window ("October 2025 to September 2026"), fetched once per session */
+let _salesWin = null;
+function salesWindow(){
+  if (!_salesWin) _salesWin = soda('usep-8jbt', {'$select':'min(sale_date) as a, max(sale_date) as b'})
+    .then(r => r?.[0]?.a ? `${monthYear(r[0].a)} to ${monthYear(r[0].b)}` : null).catch(()=>{ _salesWin = null; return null; });
+  return _salesWin;
 }
 async function fetchHousing(ctx){
   const {lat,lng} = ctx;
   const dy = 0.0045, dx = 0.0059; // ~500 m box
-  const [ev, ah] = await Promise.all([
+  const ahWhere = `latitude::number between ${lat-dy} and ${lat+dy} AND longitude::number between ${lng-dx} and ${lng+dx} AND project_start_date >= '${daysAgoISO(365*5)}'`;
+  const [ev, ah, ahTot] = await Promise.all([
     soda('6z8x-wfk4', {'$select':'residential_commercial_ind,count(*) as n',
-      '$where':`latitude::number between ${lat-dy} and ${lat+dy} AND longitude::number between ${lng-dx} and ${lng+dx} AND executed_date > '${daysAgoISO(365)}'`,
+      '$where':`latitude::number between ${lat-dy} and ${lat+dy} AND longitude::number between ${lng-dx} and ${lng+dx} AND executed_date >= '${daysAgoISO(365)}'`,
       '$group':'residential_commercial_ind'}).catch(()=>null),
     soda('hg8x-zxpr', {'$select':'project_name,sum(all_counted_units) as units,max(project_start_date) as started',
-      '$where':`latitude::number between ${lat-dy} and ${lat+dy} AND longitude::number between ${lng-dx} and ${lng+dx} AND project_start_date > '${daysAgoISO(365*5)}'`,
-      '$group':'project_name','$order':'units DESC','$limit':4}).catch(()=>null),
+      '$where':ahWhere,'$group':'project_name','$order':'units DESC','$limit':1}).catch(()=>null),
+    // the total comes from its own query so it is never capped by the "largest project" lookup
+    soda('hg8x-zxpr', {'$select':'sum(all_counted_units) as units,count(distinct project_name) as projects','$where':ahWhere}).catch(()=>null),
   ]);
   if (stale(ctx) || !$('housing')) return;
   let h = '';
   if (ev){
-    const res = ev.find(x=>x.residential_commercial_ind==='Residential');
+    // the marshals' feed switched from "Residential"/"Commercial" to "R"/"C" in late 2025; count both spellings
+    const res = ev.filter(x=>/^r/i.test(x.residential_commercial_ind||'')).reduce((s,x)=>s+ +x.n,0);
     const tot = ev.reduce((s,x)=>s+ +x.n,0);
-    h += row('Marshal evictions within ~500 meters, last 12 months', `${fmt(tot)}<span class="meta">${fmt(res? +res.n:0)} residential</span>`);
+    h += row('Marshal evictions within ~500 meters, last 12 months', `${fmt(tot)}<span class="meta">${fmt(res)} residential</span>`);
   }
-  if (ah && ah.length){
-    const units = ah.reduce((s,x)=>s+ +(+x.units||0),0);
-    h += row('City-financed affordable housing nearby, last 5 years', `${fmt(units)} units<span class="meta">largest: ${esc(projectName(ah[0].project_name))}</span>`);
+  const units = ahTot && ahTot[0] ? +ahTot[0].units || 0 : 0;
+  if (ah && ah.length && units){
+    const np = +ahTot[0].projects || 0;
+    h += row('City-financed affordable housing nearby, last 5 years', `${fmt(units)} units<span class="meta">${np>1?`${fmt(np)} projects · largest: `:''}${esc(projectName(ah[0].project_name))}</span>`);
   }
-  if (ev || (ah && ah.length)) h += `<div class="note" style="margin:0">Evictions counted are marshal-executed only — the end of the process; filings, which are far more numerous, are not in this feed. Affordable-housing units are city-financed projects only.</div>`;
+  if (ev || units) h +=`<div class="note" style="margin:0">Evictions counted are marshal-executed only — the end of the process; filings, which are far more numerous, are not in this feed. Affordable-housing units are city-financed projects only.</div>`;
   $('housing').innerHTML = h;
 }
 /* housing-production project names end in program and fiscal-year codes ("BREMOND KING DAVIS.YR15.FY26") */
@@ -1860,7 +1934,9 @@ async function fetchHpd(ctx, boroId, block, lot, unitsres){
     if (stale(ctx) || !$('hpd')) return;
     const total = rows.reduce((s,x)=>s+ +x.n,0);
     const byClass = Object.fromEntries(rows.map(x=>[x.class,+x.n]));
-    $('hpd').innerHTML = row('Open housing violations', `${fmt(total)}<span class="meta">${['A','B','C'].map(c=>`class ${c}: ${byClass[c]||0}`).join(' · ')} (C is most serious)</span>`);
+    // class I is an order (vacate, lead, etc.), not a hazard class; show it so the parts add up to the total
+    const classes = ['A','B','C'].concat(byClass.I ? ['I'] : []);
+    $('hpd').innerHTML = row('Open housing violations', `${fmt(total)}<span class="meta">${classes.map(c=>`class ${c}: ${byClass[c]||0}`).join(' · ')} (C is most serious${byClass.I?'; I is an order such as a vacate or lead order':''})</span>`);
   }catch(e){}
 }
 
@@ -1870,11 +1946,11 @@ async function fetchLiving(ctx){
   // 311 — render the local list immediately, patch in the citywide comparison when it resolves
   const since311 = daysAgoISO(90);
   soda('erm2-nwe9',{'$select':'complaint_type,count(*) as n',
-    '$where':`within_circle(location, ${lat}, ${lng}, 250) AND created_date > '${since311}'`,
-    '$group':'complaint_type','$order':'n DESC','$limit':50})
+    '$where':`within_circle(location, ${lat}, ${lng}, 250) AND created_date >= '${since311}'`,
+    '$group':'complaint_type','$order':'n DESC','$limit':1000})
   .then(rows => {
     if (stale(ctx)||!$('c311')) return;
-    const total = rows.reduce((s,x)=>s+ +x.n,0);
+    const total = rows.reduce((s,x)=>s+ +x.n,0); // every complaint type is returned (no cap), so this is the full count
     ctx.report.c311 = {total};
     const noise = rows.filter(x=>/^noise/i.test(x.complaint_type||'')).reduce((s,x)=>s+ +x.n,0);
     let h = `<div class="row"><span class="k">311 complaints, last 90 days within 250 meters</span><span class="v bignum">${fmt(total)}</span></div>
@@ -1894,7 +1970,7 @@ async function fetchLiving(ctx){
   }).catch(()=>{ if(!stale(ctx)&&$('c311')) $('c311').innerHTML='<span class="errnote">311 feed unavailable right now.</span>'; });
   // restaurants
   soda('43nn-pn8j',{'$select':'camis,dba,grade,max(inspection_date) as d',
-    '$where':`within_circle(location, ${lat}, ${lng}, 200) AND grade IS NOT NULL AND inspection_date > '${daysAgoISO(730)}'`,
+    '$where':`within_circle(location, ${lat}, ${lng}, 200) AND grade IS NOT NULL AND inspection_date >= '${daysAgoISO(730)}'`,
     '$group':'camis,dba,grade','$limit':400})
   .then(rows => {
     if (stale(ctx)||!$('food')) return;
@@ -1915,7 +1991,7 @@ async function fetchLiving(ctx){
   // rodent inspections, benchmarked against the citywide hit rate
   Promise.all([
     soda('p937-wjvj',{'$select':'result,count(*) as n',
-      '$where':`within_circle(location, ${lat}, ${lng}, 200) AND inspection_date > '${daysAgoISO(365)}'`,
+      '$where':`within_circle(location, ${lat}, ${lng}, 200) AND ${RAT_WINDOW()}`,
       '$group':'result'}),
     cityRatRate(),
   ]).then(([rows, cityRate]) => {
@@ -1934,7 +2010,7 @@ async function fetchLiving(ctx){
   // Citi Bike (live availability)
   citibikeData().then(stations => {
     if (stale(ctx)||!$('bike')||!stations) return;
-    const near = stations.map(s => ({...s, d: haversine(lat,lng,s.lat,s.lng)})).sort((a,b)=>a.d-b.d).slice(0,2).filter(s=>s.d<800);
+    const near = stations.filter(s=>s.live).map(s => ({...s, d: haversine(lat,lng,s.lat,s.lng)})).sort((a,b)=>a.d-b.d).slice(0,2).filter(s=>s.d<800);
     if (!near.length){ $('bike').innerHTML = ''; return; }
     $('bike').innerHTML = `<ul class="toplist">`+near.map(s=>`<li class="poi" data-lat="${s.lat}" data-lng="${s.lng}" data-name="${esc(s.name)}">
       <span>Citi Bike: ${esc(s.name)}<span class="sub">${s.bikes} bikes (${s.ebikes} electric) · ${s.docks} docks open right now</span></span>
@@ -1944,9 +2020,12 @@ async function fetchLiving(ctx){
 
 /* citywide rodent hit rate, fetched once per session */
 let _cityRats = null;
+/* inspections only (the feed also logs baiting, burrow stoppage, monitoring and cleanups, which are treatments,
+   not inspections), and capped at today because the feed carries a few future-dated rows */
+const RAT_WINDOW = () => `inspection_type in('Initial','Compliance') AND inspection_date >= '${daysAgoISO(365)}' AND inspection_date < '${daysAgoISO(-1)}'`;
 function cityRatRate(){
   if (!_cityRats) _cityRats = soda('p937-wjvj',{'$select':'result,count(*) as n',
-      '$where':`inspection_date > '${daysAgoISO(365)}'`,'$group':'result'})
+      '$where':RAT_WINDOW(),'$group':'result'})
     .then(rows => {
       const total = rows.reduce((s,x)=>s+ +x.n,0);
       const active = rows.filter(x=>/rat activity/i.test(x.result||'')).reduce((s,x)=>s+ +x.n,0);
@@ -1966,7 +2045,8 @@ function citibikeData(){
     status.data.stations.forEach(s => st[s.station_id] = s);
     return info.data.stations.map(s => {
       const x = st[s.station_id] || {};
-      return {name:s.name, lat:s.lat, lng:s.lon, bikes:x.num_bikes_available??'—', ebikes:x.num_ebikes_available??0, docks:x.num_docks_available??'—'};
+      // stations that are uninstalled or not renting (closed for work, winter, events) are skipped
+      return {name:s.name, lat:s.lat, lng:s.lon, live: !!(x.is_installed && x.is_renting), bikes:x.num_bikes_available??'—', ebikes:x.num_ebikes_available??0, docks:x.num_docks_available??'—'};
     });
   }).catch(()=>null);
   return _citibike;
@@ -1975,8 +2055,9 @@ function citibikeData(){
 /* ---------- 1 · street trees (place chapter) ---------- */
 function fetchTrees(ctx){
   const {lat,lng} = ctx;
+  // standing, living trees only: the forestry file also keeps removed trees ("Retired"), stumps and dead trees
   soda('hn5i-inap',{'$select':'genusspecies,count(*) as n',
-    '$where':`within_circle(location, ${lat}, ${lng}, 200)`,'$group':'genusspecies','$order':'n DESC','$limit':30})
+    '$where':`within_circle(location, ${lat}, ${lng}, 200) AND tpstructure='Full' AND tpcondition != 'Dead'`,'$group':'genusspecies','$order':'n DESC','$limit':1000})
   .then(rows => {
     if (stale(ctx)||!$('trees')) return;
     const total = rows.reduce((s,x)=>s+ +x.n,0);
@@ -1990,11 +2071,23 @@ function fetchTrees(ctx){
 }
 
 /* ---------- 4 · safety ---------- */
+/* The violent-crime figure behind the summary chip: whole neighborhood, per resident, over a long fixed
+   window. Shown in Safety so the chip that jumps here lands on its own number and caveats. */
+const VCRIME_WINDOW = 'Jan. 1, 2024, to Sept. 30, 2026';
+function vcrimeRow(nta){
+  const D = nta ? DATA.nta_demographics[nta.properties.nta2020] : null;
+  const cr = cityVcrimeRate();
+  if (!D || !cr || D.vcrime_n == null || !D.pop || D.pop < 200) return '';
+  const rate = D.vcrime_n/D.pop*1000;
+  return `<div${areaAttr('layer:nta', `Violent street crime: the whole of ${nta.properties.ntaname}`)}>` + row(`Violent street crime across ${esc(nta.properties.ntaname)}, ${VCRIME_WINDOW}`,
+    `${(rate/cr).toFixed(1)}× the city rate<span class="meta">${fmt(D.vcrime_n)} outdoor felony assaults, misdemeanor assaults, robberies and murders reported — ${rate.toFixed(1)} per 1,000 residents over that span, vs. ${cr.toFixed(1)} citywide. Per resident, so places with big daytime or visitor crowds run high.</span>`) + `</div>`;
+}
 async function fetchSafety(ctx){
   const el = $('body-safety'); if (!el) return;
   const {lat,lng} = ctx;
   const n0 = ctx.precinct;
   el.innerHTML = (n0 ? `<div class="row hl" id="pctrow" data-layer="precinct"><span class="k">Police precinct</span><span class="v"><a href="${precinctUrl(n0)}" target="_blank" rel="noopener">${n0===22?'Central Park Precinct':ordinal(n0)+' Precinct'}</a></span></div>` : '')
+    + vcrimeRow(ctx.nta)
     + `<div id="crime" style="margin-top:6px"><span class="spin"></span> Crime data…</div>
     <div id="safetylinks"></div>`;
   fetchCrime(ctx).catch(()=>{ if(!stale(ctx)&&$('crime')) $('crime').innerHTML='<span class="errnote">Crime feed unavailable right now.</span>'; });
@@ -2022,7 +2115,7 @@ function perResident(ctx, localTotal, cityTotal, radiusM){
 /* 311 citywide baseline, fetched once per session */
 let _city311 = null;
 function city311Total(since){
-  if (!_city311) _city311 = soda('erm2-nwe9',{'$select':'count(*) as n','$where':`created_date > '${since}'`})
+  if (!_city311) _city311 = soda('erm2-nwe9',{'$select':'count(*) as n','$where':`created_date >= '${since}'`})
     .then(r=>+r[0].n).catch(()=>{ _city311 = null; return null; });
   return _city311;
 }
@@ -2092,14 +2185,13 @@ async function crimeBaselines(){
 }
 let _cityCrash = null;
 function cityCrashTotal(){
-  if (!_cityCrash) _cityCrash = soda('h9gi-nx95',{'$select':'count(*) as n','$where':`crash_date > '${daysAgoISO(365)}'`})
+  if (!_cityCrash) _cityCrash = soda('h9gi-nx95',{'$select':'count(*) as n','$where':`crash_date >= '${daysAgoISO(365)}'`})
     .then(r=>+r[0].n).catch(()=>{ _cityCrash = null; return null; });
   return _cityCrash;
 }
 function fmtWindow(startISO, endISO){
-  const o = {month:'long', day:'numeric'};
   const s = new Date(startISO+'T12:00:00'), e = new Date(endISO+'T12:00:00');
-  return `${s.toLocaleDateString('en-US',o)} to ${e.toLocaleDateString('en-US',o)}, ${e.getFullYear()}`;
+  return `${apDay(s, s.getFullYear()!==e.getFullYear())} to ${apDay(e)}`;
 }
 async function fetchCrime(ctx){
   const {lat,lng} = ctx;
@@ -2108,9 +2200,11 @@ async function fetchCrime(ctx){
   const RADIUS = 500;
   const wNow = `within_circle(lat_lon, ${lat}, ${lng}, ${RADIUS})`;
   const lastStart = (+base.start.slice(0,4)-1) + base.start.slice(4);
-  const lastEnd = (+base.end.slice(0,4)-1) + base.end.slice(4);
-  const sparkStart = new Date(new Date(base.end) - 380*86400000).toISOString().slice(0,10);
-  const [rows, lastYear, sparkOld, sparkNew, cs, crash, cityCrash, crashMax] = await Promise.all([
+  // same dates a year earlier; Feb. 29 has no counterpart, so it falls back to Feb. 28
+  const lastEnd = ((+base.end.slice(0,4)-1) + base.end.slice(4)).replace(/-02-29$/, '-02-28');
+  // 13 whole months: the first of the end month, one year back (a mid-month start made the first bar a half month)
+  const sparkStart = (+base.end.slice(0,4)-1) + '-' + base.end.slice(5,7) + '-01';
+  const [rows, lastYear, sparkOld, sparkNew, cs, crash, cityCrash, crashMax, histMax] = await Promise.all([
     soda('5uac-w243', {'$select':'ofns_desc,law_cat_cd,count(*) as n','$where':wNow,'$group':'ofns_desc,law_cat_cd','$order':'n DESC','$limit':80}),
     // everything past the current complaints is optional: one slow city query shouldn't blank the section
     soda('qgea-i56i', {'$select':'count(*) as n','$where':`${wNow} AND rpt_dt between '${lastStart}T00:00:00' and '${lastEnd}T23:59:59'`}).catch(()=>null),
@@ -2118,13 +2212,17 @@ async function fetchCrime(ctx){
     soda('5uac-w243', {'$select':'date_trunc_ym(rpt_dt) as m,count(*) as n','$where':wNow,'$group':'m'}).catch(()=>null),
     compstatData(),
     soda('h9gi-nx95',{'$select':'count(*) as n, sum(number_of_persons_injured) as inj, sum(number_of_persons_killed) as killed',
-      '$where':`within_circle(location, ${lat}, ${lng}, 250) AND crash_date > '${daysAgoISO(365)}'`}).catch(()=>null),
+      '$where':`within_circle(location, ${lat}, ${lng}, 250) AND crash_date >= '${daysAgoISO(365)}'`}).catch(()=>null),
     cityCrashTotal(),
     feedMax('h9gi-nx95','crash_date'),
+    feedMax('qgea-i56i','rpt_dt'),
   ]);
   if (stale(ctx)||!$('crime')) return;
   const total = rows.reduce((s,x)=>s+ +x.n,0);
-  const prev = lastYear ? +(lastYear[0]?.n || 0) : null;
+  // when the year-to-date file rolls into a new year before the historic file has caught up, last year's
+  // dates aren't published yet: treat that as "no comparison", never as zero complaints
+  const histCovers = histMax ? histMax.slice(0,10) >= lastEnd : true;
+  const prev = lastYear && histCovers ? +(lastYear[0]?.n || 0) : null;
   const fel = rows.filter(x=>x.law_cat_cd==='FELONY').reduce((s,x)=>s+ +x.n,0);
   const mis = rows.filter(x=>x.law_cat_cd==='MISDEMEANOR').reduce((s,x)=>s+ +x.n,0);
   // expected count for an average NYC area this size, same window
@@ -2174,7 +2272,7 @@ async function fetchCrime(ctx){
       <div class="g"><b>${perRes ? perRes.mult.toFixed(1)+'×' : '—'}</b><span>${perRes ? `the citywide rate by residents (≈${fmt(perRes.residents)} live here)` : 'per-resident rate not computed: no residential population counted here'}</span></div>
       <div class="g"><b>${rank?`${rank} of ${base.pctRates.length}`:'—'}</b><span>precinct rank, complaints per square mile (1 = most)</span></div>
     </div>
-    <div class="row"><span class="k">How serious were they?</span><span class="v">${fmt(fel)} felonies · ${fmt(mis)} misdemeanors<span class="meta">plus ${fmt(total-fel-mis)} violations (the least serious tier, like open container). Felonies are the most serious; the ${fmt(total)} above counts all three.</span></span></div>`;
+    <div class="row"><span class="k">How serious were they?</span><span class="v">${plural(fel,'felony','felonies')} · ${plural(mis,'misdemeanor','misdemeanors')}<span class="meta">plus ${plural(total-fel-mis,'violation','violations')} (the least serious tier, like open container). Felonies are the most serious; the ${fmt(total)} above counts all three.</span></span></div>`;
   if (top.length) h += `<ul class="toplist">`+top.map(([k,n])=>`<li><span>${esc(k)}</span><span class="n">${fmt(n)}</span></li>`).join('')+`</ul>`;
   h += `</div>`;
   if (crash && crash[0]){
@@ -2244,7 +2342,7 @@ function offenseName(s){
 /* the CompStat feed dates weeks as M/D/YYYY */
 function csDate(s){
   const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s || '');
-  return m ? new Date(+m[3], +m[1]-1, +m[2]).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}) : (s || '');
+  return m ? apDay(new Date(+m[3], +m[1]-1, +m[2])) : (s || '');
 }
 
 /* ---------- 7 · new and changing ---------- */
@@ -2255,15 +2353,22 @@ async function fetchChanging(ctx){
     <div id="building" style="margin-top:12px"${nta ? areaAttr('layer:nta', `Building filings: the whole of ${nta.properties.ntaname}`) : ''}><span class="spin"></span> Construction and demolition…</div>
     <div id="newbiz" style="margin-top:12px"${areaAttr('box:0.0036:0.0047', 'New business licenses: a box about 400 meters each way')}><span class="spin"></span> Newly licensed businesses…</div>
     <div id="film" style="margin-top:12px"${zip ? areaAttr('zip', `Film shoots: ZIP ${zip} (census approximation of the ZIP code)`) : ''}><span class="spin"></span> Film shoots…</div>`;
-  // new restaurants: first-ever inspection in the last 9 months
-  soda('43nn-pn8j',{'$select':'camis,dba,min(inspection_date) as first_seen',
-    '$where':`within_circle(location, ${lat}, ${lng}, 500)`,'$group':'camis,dba',
-    '$having':`min(inspection_date) > '${daysAgoISO(270)}'`,'$order':'first_seen DESC','$limit':8})
-  .then(rows => {
+  // new restaurants: first-ever inspection in the last 9 months, and the place went through a pre-permit
+  // inspection (what a new permit gets). Without that check, an old place whose earlier rows have aged out of
+  // the file looks new; grouping by permit number alone keeps a renamed place from counting as an opening.
+  soda('43nn-pn8j',{'$select':'camis,max(dba) as dba,min(inspection_date) as first_seen',
+    '$where':`within_circle(location, ${lat}, ${lng}, 500)`,'$group':'camis',
+    '$having':`min(inspection_date) >= '${daysAgoISO(270)}'`,'$order':'first_seen DESC','$limit':200})
+  .then(async rows => {
+    if (rows.length){
+      const pre = await soda('43nn-pn8j',{'$select':'camis','$group':'camis','$limit':200,
+        '$where':`camis in(${rows.map(r=>`'${String(r.camis).replace(/\D/g,'')}'`).join(',')}) AND inspection_type like 'Pre-permit%'`}).catch(()=>null);
+      if (pre){ const ok = new Set(pre.map(r=>r.camis)); rows = rows.filter(r=>ok.has(r.camis)); }
+    }
     if (stale(ctx)||!$('newfood')) return;
-    let h = `<div class="row"><span class="k">New restaurants and food spots within 500 meters</span><span class="v bignum">${rows.length}${rows.length===8?'+':''}</span></div>`;
+    let h = `<div class="row"><span class="k">New restaurants and food spots within 500 meters</span><span class="v bignum">${fmt(rows.length)}</span></div>`;
     if (rows.length) h += `<ul class="toplist">`+rows.slice(0,6).map(x=>`<li><span>${esc(titleWords(x.dba))}</span><span class="n">${monthYear(x.first_seen)}</span></li>`).join('')+`</ul>`;
-    h += `<div class="note">"New" means first-ever health inspection in the last nine months — a good proxy for openings.</div>`;
+    h += `<div class="note">"New" means a permit whose first-ever health inspection, a pre-permit inspection, came in the last nine months — a good proxy for openings, though a new owner taking over an existing place also gets a new permit.</div>`;
     $('newfood').innerHTML = h;
   }).catch(()=>{ if(!stale(ctx)&&$('newfood')) $('newfood').innerHTML='<span class="errnote">Inspection feed unavailable right now.</span>'; });
   // construction: DOB NOW jobs in this neighborhood. Every job has one initial filing (its
@@ -2271,7 +2376,7 @@ async function fetchChanging(ctx){
   // so counting rows counts paperwork; counting -I1 rows counts jobs.
   if (nta){
     const name = nta.properties.ntaname.replace(/'/g,"''");
-    const where = `nta='${name}' AND filing_date > '${daysAgoISO(365)}' AND job_type in('New Building','Full Demolition') AND job_filing_number like '%-I1'`;
+    const where = `nta='${name}' AND filing_date >= '${daysAgoISO(365)}' AND job_type in('New Building','Full Demolition') AND job_filing_number like '%-I1'`;
     Promise.all([
       soda('w9ak-ipjd',{'$select':'job_type,count(*) as n','$where':where,'$group':'job_type'}),
       soda('w9ak-ipjd',{'$select':'job_type,filing_date,house_no,street_name','$where':where,'$order':'filing_date DESC','$limit':12}),
@@ -2299,7 +2404,7 @@ async function fetchChanging(ctx){
   const dy = 0.0036, dx = 0.0047, LIC_LIMIT = 40;
   Promise.all([
     soda('w7w3-xahh',{'$select':'business_name,dba_trade_name,business_category,license_creation_date',
-      '$where':`latitude::number between ${lat-dy} and ${lat+dy} AND longitude::number between ${lng-dx} and ${lng+dx} AND license_creation_date > '${daysAgoISO(365)}' AND license_status='Active'`,
+      '$where':`latitude::number between ${lat-dy} and ${lat+dy} AND longitude::number between ${lng-dx} and ${lng+dx} AND license_creation_date >= '${daysAgoISO(365)}' AND license_status='Active'`,
       '$order':'license_creation_date DESC','$limit':LIC_LIMIT}),
     feedMax('w7w3-xahh','license_creation_date'),
   ]).then(([rows, mx]) => {
@@ -2323,7 +2428,7 @@ async function fetchChanging(ctx){
   if (zip){
     Promise.all([
       soda('tg4x-b46p',{'$select':'category,subcategoryname,startdatetime,parkingheld',
-        '$where':`zipcode_s LIKE '%${zip}%' AND startdatetime > '${daysAgoISO(180)}' AND eventtype='Shooting Permit'`,
+        '$where':`zipcode_s LIKE '%${zip}%' AND startdatetime >= '${daysAgoISO(180)}' AND eventtype='Shooting Permit'`,
         '$order':'startdatetime DESC','$limit':5}),
       feedMax('tg4x-b46p','enteredon'),  // when a permit was filed, not its (often future) shoot date — a true "data through" signal
     ]).then(([rows, mx]) => {
@@ -2346,7 +2451,7 @@ function titleWords(s){ return String(s||'').toLowerCase().replace(/(^|\s|-|\/)\
 function monthYear(iso){
   if (!iso) return '';
   const d = new Date(iso);
-  return d.toLocaleDateString('en-US',{month:'short', year:'numeric'});
+  return d.toLocaleDateString('en-US',{month:'long', year:'numeric'}); // AP: month spelled out when it stands alone with a year
 }
 /* some city feeds quietly stop updating; check each dataset's true max date once per session
    and say so rather than implying the window runs to today */
@@ -2380,7 +2485,7 @@ async function fetchLore(ctx){
   const np = neighborhoodsProjectLink(ctx.nta);
   h += morelinks([
     np && [np.url, `${np.name} in The Neighborhoods (Rob Stephenson)`],
-    ['https://joshgreenman1973.github.io/nyc-three-eras/', 'This address in 1940 and the 1980s'],
+    ['https://joshgreenman1973.github.io/nyc-three-eras/', 'Three Eras: look up this address in 1940, the 1980s and today'],
     ['https://80s.nyc/', '1980s street view (80s.nyc)'],
     ['https://www.oldnyc.org/', 'Old photos by location (OldNYC)'],
     [`https://digitalcollections.nypl.org/search/index?keywords=${encodeURIComponent((ctx.nta?ctx.nta.properties.ntaname.split('-')[0]:'New York City'))}`, 'NYPL digital collections'],
@@ -2496,7 +2601,7 @@ function languagesBlock(){
   }).join('');
   if (rest > 0) h += `<div class="note" style="margin-top:2px">Plus ${rest} more language${rest > 1 ? 's' : ''} with smaller estimates.</div>`;
   h += `<div class="morelinks"><a href="${L.explorer}" target="_blank" rel="noopener">The city's NYC Language Explorer</a></div>
-    <div class="note">Department of City Planning, NYC Language Explorer (June 2026), from American Community Survey 2020-2024 public-use microdata. Those records are published no finer than census areas of about 100,000 people, so these figures cover more ground than the neighborhood numbers above; the limited-English share differs from the neighborhood figure for that reason, not because the definition changes. Counts are residents age 5 and older, with 90 percent margins of error. Faded rows are unreliable (a coefficient of variation of 20 percent or more), and languages whose margin of error is as large as the estimate are left out, as the city's tool does. "Most of any district" appears only where the lead over the next district is larger than sampling error. Chinese includes Mandarin and Cantonese; Tagalog includes Filipino; French includes Cajun; Persian includes Farsi and Dari; Akan includes Twi.</div></div>`;
+    <div class="note">Department of City Planning, NYC Language Explorer (July 2026), from American Community Survey 2020-2024 public-use microdata. Those records are published no finer than census areas of about 100,000 people, so these figures cover more ground than the neighborhood numbers above; the limited-English share differs from the neighborhood figure for that reason, not because the definition changes. Counts are residents age 5 and older, with 90 percent margins of error. Faded rows are unreliable (a coefficient of variation of 20 percent or more), and languages whose margin of error is as large as the estimate are left out, as the city's tool does. "Most of any district" appears only where the lead over the next district is larger than sampling error. Chinese includes Mandarin and Cantonese; Tagalog includes Filipino; French includes Cajun; Persian includes Farsi and Dari; Akan includes Twi.</div></div>`;
   return h;
 }
 
@@ -2641,7 +2746,7 @@ async function printProfile(ctx){
   const addr = document.querySelector('.phead h2')?.textContent || '';
   const foot = document.createElement('div');
   foot.id = 'printfoot';
-  foot.innerHTML = `The Everything Map — profile of ${esc(addr)}. Generated ${new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})} from ${location.href.split('#')[0]}#${ctx.lat.toFixed(5)},${ctx.lng.toFixed(5)} · joshgreenman1973.github.io/nyc-everything-map · figures carry the caveats noted in each section; see the methodology page.`;
+  foot.innerHTML = `The Everything Map — profile of ${esc(addr)}. Generated ${apDay(new Date())} from ${location.href.split('#')[0]}#${ctx.lat.toFixed(5)},${ctx.lng.toFixed(5)} · joshgreenman1973.github.io/nyc-everything-map · figures carry the caveats noted in each section; see the methodology page.`;
   $('panelbody').appendChild(foot);
   if (btn){ btn.textContent = '⎙ Print'; btn.disabled = false; }
   window.print();

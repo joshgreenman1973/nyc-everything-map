@@ -13,7 +13,8 @@ whenever this script is rerun.
 import re, json, csv, sys
 
 # Hand-verified June 9, 2026 against official office websites and
-# coverage of the January 1, 2026 inaugurations.
+# coverage of the January 1, 2026 inaugurations; re-verified Nov. 18, 2026
+# (none of these offices was on the Nov. 3, 2026 ballot).
 CITYWIDE = {
     'mayor': {'name': 'Zohran Mamdani', 'party': 'Democrat'},
     'public_advocate': {'name': 'Jumaane Williams', 'party': 'Democrat'},
@@ -30,6 +31,23 @@ BOROUGH = {
     'Bronx':         {'bp': 'Vanessa Gibson',     'da': 'Darcel Clark'},
     'Staten Island': {'bp': 'Vito Fossella',      'da': 'Michael McMahon'},
 }
+# Seat-level corrections applied on top of the scraped sources, re-verified Nov. 18, 2026
+# against nysenate.gov, nyassembly.gov and council.nyc.gov. Open States can lag a
+# resignation (Senate 12) or carry a name the office doesn't use. Review every entry
+# at each refresh and delete it once the source agrees. January 2027: Senate 12 goes
+# to Aber Kawas (D) on Jan. 1 along with the rest of the new Legislature.
+OVERRIDES = {
+    ('senate', '12'): {'name': 'Vacant (Michael Gianaris resigned in August 2026; Aber Kawas, elected Nov. 3, takes office Jan. 1, 2027)', 'party': ''},
+    ('senate', '29'): {'name': 'José M. Serrano'},
+    ('senate', '34'): {'name': 'Nathalia Fernandez'},
+    ('assembly', '45'): {'name': 'Michael Novakhov'},
+    ('council', '40'): {'name': 'Rita C. Joseph'},
+}
+
+def apply_overrides(officials):
+    for (chamber, dist), fields in OVERRIDES.items():
+        officials[chamber].setdefault(dist, {}).update(fields)
+
 LEADERSHIP_PREFIXES = ('Deputy Speaker ', 'Speaker ', 'Majority Leader ', 'Majority Whip ',
                        'Minority Leader ', 'Minority Whip ')
 
@@ -91,6 +109,7 @@ if __name__ == '__main__':
     officials = {'council': council(), 'congress': congress(),
                  'senate': sen, 'assembly': asm,
                  'citywide': CITYWIDE, 'borough': BOROUGH}
+    apply_overrides(officials)
     verify_coverage(officials)
     json.dump(officials, open('officials.json', 'w'), ensure_ascii=False)
     print('officials.json written; all district layers fully covered')

@@ -24,7 +24,7 @@ The site is one static page, [`docs/index.html`](docs/index.html), on GitHub Pag
   - `build_data.sh` runs the whole pipeline, end to end.
   - `extract_officials.py` builds `officials.json`. Citywide and borough officials are entered by hand in this file.
   - `extract_demographics.py` builds the old American Community Survey (ACS) 2016-2020 base; `refresh_acs2024.py` then rebuilds every neighborhood figure on ACS 2020-2024.
-  - `bake_extras.py` bakes the point files and extras: schools and school quality, landmarks, air quality, heat vulnerability, bus stops, election results (`elections()`, which ends by merging the 2024 presidential results in `pres24()`), the "Two factors" indicators (`nta_indicators()`), hospitals, The Neighborhoods links.
+  - `bake_extras.py` bakes the point files and extras: schools and school quality (`infohub_schools()` lays the Department of Education's InfoHub spreadsheets, which run years ahead of the Open Data copies, over the Open Data base; download them into `data/raw/infohub/` first), landmarks, air quality, heat vulnerability, bus stops, election results (`elections()`, which ends by merging the 2024 presidential results in `pres24()`), the "Two factors" indicators (`nta_indicators()`), hospitals, The Neighborhoods links.
   - `bake_rankings.py` copies neighborhood ranks from the sibling `nyc-nta-rankings` project (a local clone next to this one).
   - `refresh_askingrents.py` rebakes StreetEasy median asking rents.
   - `build_restaurants.py` / `refresh_restaurants.py` and `build_commonplace.py` rebuild the restaurant and named-place files.
@@ -39,15 +39,17 @@ export CENSUS_API_KEY=...   # free key from api.census.gov
 bash scripts/build_data.sh
 ```
 
-Before running it, recheck the hand-entered citywide and borough officials in `scripts/extract_officials.py` (mayor, public advocate, comptroller, borough presidents, district attorneys). The pipeline asserts a named officeholder for all 51 council, 13 congressional, 28 State Senate and 65 Assembly districts.
+Before running it, recheck the hand-entered citywide and borough officials in `scripts/extract_officials.py` (mayor, public advocate, comptroller, borough presidents, district attorneys) and its `OVERRIDES`, the seat-level fixes for vacancies and names the upstream files get wrong. Delete an override once the source agrees. The pipeline asserts a named officeholder for all 51 council, 13 congressional, 28 State Senate and 65 Assembly districts.
 
 After any change to `docs/data/`, bump `DATA_VERSION` in `docs/index.html` so browsers drop their cached copies.
 
 Things that bite:
 
-- The "Two factors" eviction and new-building windows are frozen constants at the top of `nta_indicators()` in `bake_extras.py`. Move them on purpose, and update the methodology page when you do.
+- The "Two factors" eviction and new-building windows and the PM2.5 year are frozen constants (`EVIC_WINDOW`, `NEWBUILD_WINDOW`, `PM25_YEAR`) in `bake_extras.py`. Move them on purpose, and update the two-factor notes in `index.html` and the methodology page when you do.
+- `nta_indicators()` updates the published `docs/data/nta_demographics.json` in place. Never rebuild that file from `data/raw/nta_demographics.json`, which is the old ACS 2016-2020 base.
+- City limits come from `docs/data/cityextent.json`, the borough boundaries with water included (Open Data wh2p-dxnf), unioned and simplified.
 - New-building counts use DOB NOW initial filings only (job numbers ending `-I1`). Every job also has a row per amendment and work type, so counting rows overstates construction about eightfold. The live panel and the baked indicator both follow this rule.
-- The Board of Elections CSV writes tallies over 999 with a comma ("1,020"). `pres24()` handles it; a June 2026 one-off parse didn't, and 37 districts were wrong until October 2026.
+- The Board of Elections CSV writes tallies over 999 with a comma ("1,020"). `pres24()` handles it; any other parse of that file has to as well.
 - Some city feeds stall for months (business licenses, film permits, crashes), and the crime complaint file is quarterly. The page checks each feed's newest record and says when it lags; nothing to fix on this end.
 - Hospital emergency-room status is a hand-checked list in `bake_extras.py hospitals()`. Emergency departments open and close.
 - The languages block (`bake_languages.py`) reads City Planning's NYC Language Explorer layers on ArcGIS Online. City Planning names them by release (`PUMAData_Language_Mar2026`), so a new edition will likely live at a new URL: find it in the Explorer's app config (`arcgis.com/sharing/rest/content/items/0da08a1596574ec78cbaa5bef6a04b3e/data?f=json`) and update the constants. The long table's district numbers have errors; the script joins on names.
@@ -57,14 +59,14 @@ Things that bite:
 | When | What |
 |---|---|
 | Monthly (automatic) | Restaurants (1st) and CommonPlace named places (2nd), by GitHub Actions |
-| After the Nov. 3, 2026 election | Every State Senate, Assembly and House seat is on the ballot. Nothing on the map changes until the winners take office, but line up the new names then |
 | December 2026 | The Census Bureau releases the ACS 2021-2025 five-year estimates (usually in December): rerun `refresh_acs2024.py` against the new vintage and update the vintage labels |
 | Late 2026 | Once the Board of Elections certifies the November results, the governor's race by election district could join the 2024 and 2025 rows |
-| Jan. 1, 2027 | The new State Legislature takes office, including a senator for District 12 (vacant since Aug. 7, 2026). Update `officials.json`, the "verified" date in the representation chapter and the methodology page |
+| Jan. 1, 2027 | The new State Legislature takes office, including a senator for District 12 (vacant since August 2026; Aber Kawas won it Nov. 3). Rerun `extract_officials.py`, drop the Senate 12 override and update the "verified" date in the representation chapter and the methodology page |
 | Jan. 3, 2027 | The new Congress takes office; recheck the House members |
 | Weekly, optional | `bake_extras.py neighborhoods_project()` picks up new posts from Rob Stephenson's The Neighborhoods |
 | When City Planning updates the Language Explorer | Probably after the ACS 2021-2025 microdata come out (usually January): rerun `bake_languages.py` and `build_topo.mjs`, update the vintage in the block's note and the methodology page |
-| Each refresh | Recheck the hospital emergency-room list and the feed lag notes |
+| Summer 2027 | InfoHub posts 2027 test results (usually August) and the class of 2026 graduation rates; download the new spreadsheets and rerun `infohub_schools()` |
+| Each refresh | Recheck the hospital emergency-room list, the officials overrides and the feed lag notes |
 
 ## Serving locally
 

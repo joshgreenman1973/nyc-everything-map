@@ -37,8 +37,11 @@ for spec in "${SPECS[@]}"; do
   npx -y mapshaper "${src}.geojson" -simplify weighted interval=2 keep-shapes \
     -filter-fields "$fields" -o force precision=0.000001 "../out/${out}.json"
 done
-# historic districts: designated only, keep name + LP number
-npx -y mapshaper historic.geojson -filter '"DESIGNATED" == status_of_' \
+# historic districts: designated only, keep name + LP number. Since mid-2026 the city's export
+# comes in state plane feet (EPSG:2263), so reproject; it also folds some extensions into their
+# parent districts (141 features in Nov. 2026 vs. 157 baked in June), so diff the LP numbers
+# against docs/data/historic.json before publishing a full rebuild.
+npx -y mapshaper historic.geojson -proj wgs84 init=EPSG:2263 -filter '"DESIGNATED" == status_of_' \
   -simplify weighted interval=2 keep-shapes -filter-fields area_name,lp_number \
   -o force precision=0.000001 ../out/historic.json
 

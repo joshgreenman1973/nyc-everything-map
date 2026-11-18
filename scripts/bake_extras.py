@@ -48,8 +48,17 @@ def landmarks():
         if p.get('lpc_sitest') != 'Designated' or not p.get('lpc_name') or p['lpc_lpnumb'] in seen:
             continue
         c = shape(f['geometry']).representative_point()
-        seen[p['lpc_lpnumb']] = [p['lpc_name'], round(c.y, 5), round(c.x, 5),
-                                 (p.get('desdate') or '')[:4], p.get('url_report') or '']
+        x, y = c.x, c.y
+        if abs(x) > 180:  # since mid-2026 some rows come in state plane feet (EPSG:2263), not degrees
+            from pyproj import Transformer
+            x, y = Transformer.from_crs(2263, 4326, always_xy=True).transform(x, y)
+        des = p.get('desdate') or ''
+        year = des.split('/')[-1][:4] if '/' in des else des[:4]   # "4/7/2026" or "2026-04-07T..."
+        url = p.get('url_report') or f"https://s-media.nyc.gov/agencies/lpc/lp/{int(p['lpc_lpnumb'].split('-')[1]):04d}.pdf"
+        seen[p['lpc_lpnumb']] = [p['lpc_name'], round(y, 5), round(x, 5), year, url]
+    # NOTE: the published file also carries a 6th field, "architect · style", joined by hand from the
+    # nyc-landmark-architects project (about 60 m proximity). Rerunning this drops it; to add a new
+    # designation, append rows to docs/data/landmarks.json instead (done that way Nov. 18, 2026).
     json.dump(list(seen.values()), open(f'{OUT}/landmarks.json', 'w'), ensure_ascii=False)
     print(len(seen), 'landmarks')
 
@@ -308,12 +317,25 @@ def hospitals():
         'SBH Health System': 'St. Barnabas Hospital (SBH)',
         'St Johns Episcopal Hospital So Shore': "St. John's Episcopal Hospital",
         'Staten Island University Hosp-North': 'Staten Island University Hospital - North',
+        "Montefiore Einstein Children's Center for Mental Health of the Children's Hospital at Montefiore Einstein": "Montefiore Einstein Children's Center for Mental Health",
         "Staten Island University Hospital Prince's Bay": "Staten Island University Hospital - Prince's Bay",
     }
+    # The state file sometimes drops a campus's coordinates (Wyckoff Heights, Oct. 2026). Skipping
+    # those rows would silently remove an emergency room, so reuse the last published location
+    # and say so loudly; a campus with no location anywhere stops the bake.
+    try:
+        prev = {h[0]: (h[1], h[2]) for h in json.load(open(f'{OUT}/hospitals.json'))}
+    except (OSError, ValueError):
+        prev = {}
     seen, out = set(), []
     for r in rows:
-        if not r.get('latitude'): continue
         name = r['facility_name']
+        if not r.get('latitude') or not r.get('longitude'):
+            disp0 = RENAME.get(name, name)
+            if disp0 not in prev:
+                raise SystemExit(f'hospitals: {name} has no coordinates in the state file and none on record')
+            print(f'WARNING hospitals: {name} has no coordinates in the state file; reusing the last published location')
+            r = dict(r, latitude=prev[disp0][0], longitude=prev[disp0][1])
         lat, lng = round(float(r['latitude']), 5), round(float(r['longitude']), 5)
         key = (name, round(lat, 3), round(lng, 3))
         if key in seen: continue
@@ -346,11 +368,15 @@ def lightcrime():
     print(len(hexes), 'lighting-crime hexes')
 
 # Neighborhood indicators for the "Two factors at once" presets. The windows are
-# frozen at the ones first published (June 2026) so a rebake reproduces the site;
-# move them deliberately, and update the methodology page when you do.
-EVIC_WINDOW = ('2024-06-01', '2026-06-04')      # executed_date, inclusive
-NEWBUILD_WINDOW = ('2025-06-11', '2026-06-08')  # filing_date, inclusive
-PM25_YEAR = 2023
+# frozen constants so a rebake reproduces the site; move them deliberately, and
+# update the methodology page and the preset notes in index.html when you do.
+# Moved Nov. 18, 2026 (first published June 2026 with 2024-06-01..2026-06-04,
+# 2025-06-11..2026-06-08 and PM2.5 2023). The violent-crime window is whatever the
+# lighting-crime hexes cover (meta.crime): Jan. 1, 2024 to Sept. 30, 2026 as of
+# this bake; VCRIME_WINDOW in index.html must match it.
+EVIC_WINDOW = ('2024-11-17', '2026-11-16')      # executed_date, inclusive (24 months)
+NEWBUILD_WINDOW = ('2025-11-18', '2026-11-17')  # filing_date, inclusive (12 months)
+PM25_YEAR = 2024
 
 def vcrime_by_nta(names):
     """Outdoor violent crime points summed from the bivariate lighting-crime hexes,
@@ -418,7 +444,10 @@ def nta_indicators():
     nta = json.load(open('nta.geojson'))
     names = {f['properties']['ntaname']: f['properties']['nta2020'] for f in nta['features']}
     vc, ev, nb, pm = vcrime_by_nta(names), evictions_by_nta(nta), newbuild_by_nta(names), pm25_by_nta(nta)
-    demo = json.load(open('nta_demographics.json'))
+    # Start from the PUBLISHED file. data/raw/nta_demographics.json can hold the old ACS
+    # 2016-2020 base (refresh_acs2024.py writes the 2020-2024 values to docs/data), and
+    # starting from it would silently roll the whole demographic table back four years.
+    demo = json.load(open(f'{OUT}/nta_demographics.json'))
     for code, d in demo.items():
         d['vcrime_n'], d['evic_n'], d['newbuild_n'] = vc.get(code, 0), ev.get(code, 0), nb.get(code, 0)
         if code in pm:
@@ -431,7 +460,7 @@ def nta_indicators():
           sum(nb.values()), 'new building jobs,', len(pm), 'NTAs with PM2.5')
 
 if __name__ == '__main__':
-    schools(); school_quality(); landmarks(); airquality(); hvi(); density_fields(); nta_indicators(); cityoutline(); busstops(); elections(); neighborhoods_project(); hospitals(); lightcrime()
+    schools(); school_quality(); infohub_schools(); landmarks(); airquality(); hvi(); density_fields(); nta_indicators(); cityoutline(); busstops(); elections(); neighborhoods_project(); hospitals(); lightcrime()
 
 # NOTE: the two June 2026 one-off merges became functions in Oct. 2026: pres24()
 # (called at the end of elections()) and nta_indicators() (called after
@@ -447,3 +476,63 @@ if __name__ == '__main__':
 #   been revised since June, so the committed evic_n values were left alone.
 # - newbuild_n was rebaked with initial filings only (see newbuild_by_nta): 1,897
 #   jobs citywide, down from 15,353 filing rows.
+
+# ---------------------------------------------------------------------------
+# School figures from the DOE's InfoHub spreadsheets (added Nov. 18, 2026).
+# The NYC Open Data copies (iebs-5yhr, 74kb-55u9, mjm3-8dw8, c7ru-d68s) stopped
+# at 2023 tests, the class of 2023 and 2021-22 enrollment; InfoHub carries tests
+# through 2026, graduation through the class of 2025 and enrollment through
+# 2025-26. Download into data/raw/infohub/ first (links on
+# infohub.nyced.org/reports/academics/test-results, .../graduation-results and the
+# demographic snapshot page):
+#   school-ela-results-public.xlsx, school-math-results-public.xlsx,
+#   2025-graduation-rates-public-school.xlsx,
+#   demographic-snapshot-2021-22-to-2025-26-public.xlsx
+# Locations stay the 2019-20 point file (a3nt-yts4); a school with no row for the
+# chosen year keeps no figure rather than an older one.
+INFOHUB = dict(test_year=2026, grad_cohort=2021, enroll_year='2025-26')
+
+def infohub_schools(cfg=INFOHUB, check=False):
+    import openpyxl
+    def rows(fname, sheet):
+        ws = openpyxl.load_workbook(f'infohub/{fname}', read_only=True)[sheet]
+        it = ws.iter_rows(values_only=True)
+        hdr = next(it)
+        for r in it:
+            yield dict(zip(hdr, r))
+    num = lambda v: round(float(v), 1) if isinstance(v, (int, float)) else None
+    def tests(fname, sheet, year):
+        return {r['DBN']: num(r['% Level 3+4']) for r in rows(fname, sheet)
+                if r['Year'] == year and r['Grade'] == 'All Grades' and r['Category'] == 'All Students'}
+    def grads(cohort):
+        return {r['DBN']: num(r['% Grads']) for r in rows('2025-graduation-rates-public-school.xlsx', 'All')
+                if r['Cohort Year'] == cohort and r['Cohort'] == '4 year June' and r['Category'] == 'All Students'}
+    if check:   # the 2023 / class-of-2023 figures must match what the Open Data copies gave
+        old = {s[0]: s for s in json.load(open(f'{OUT}/schools.json'))}
+        for label, got, idx in (('ELA 2023', tests('school-ela-results-public.xlsx', 'ELA - All', 2023), 6),
+                                ('math 2023', tests('school-math-results-public.xlsx', 'Math - All', 2023), 7),
+                                ('grad cohort 2019', grads(2019), 8)):
+            both = [k for k in old if old[k][idx] is not None and got.get(k) is not None]
+            off = [k for k in both if abs(old[k][idx] - got[k]) > 0.15]
+            print(f'{label}: {len(both)} schools compared, {len(off)} differ by more than 0.15 points', off[:5])
+        return
+    ela = tests('school-ela-results-public.xlsx', 'ELA - All', cfg['test_year'])
+    math = tests('school-math-results-public.xlsx', 'Math - All', cfg['test_year'])
+    grad = grads(cfg['grad_cohort'])
+    grades = [('Grade 3K', '3K'), ('Grade PK (Half Day & Full Day)', 'PK'), ('Grade K', 'K')] + \
+             [(f'Grade {i}', str(i)) for i in range(1, 13)]
+    enr = {}
+    for r in rows('demographic-snapshot-2021-22-to-2025-26-public.xlsx', 'School'):
+        if r['Year'] == cfg['enroll_year']:
+            served = [lab for col, lab in grades if (r.get(col) or 0) > 0]
+            enr[r['DBN']] = (int(r['Total Enrollment'] or 0),
+                             served[0] + ('-' + served[-1] if len(served) > 1 else '') if served else '')
+    schools = json.load(open(f'{OUT}/schools.json'))
+    for s in schools:
+        tot, span = enr.get(s[0], (None, ''))
+        s[4], s[5] = tot, span
+        s[6], s[7], s[8] = ela.get(s[0]), math.get(s[0]), grad.get(s[0])
+    json.dump(schools, open(f'{OUT}/schools.json', 'w'), ensure_ascii=False)
+    print(f"schools: {sum(1 for s in schools if s[4])} with {cfg['enroll_year']} enrollment, "
+          f"{sum(1 for s in schools if s[6] is not None)} ELA, {sum(1 for s in schools if s[7] is not None)} math "
+          f"({cfg['test_year']}), {sum(1 for s in schools if s[8] is not None)} grad rates (cohort {cfg['grad_cohort']})")

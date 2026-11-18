@@ -68,7 +68,7 @@ def languages(key):
     return total, langs
 
 out = {
-    'source': 'NYC Department of City Planning, NYC Language Explorer (June 2026), '
+    'source': 'NYC Department of City Planning, NYC Language Explorer (July 2026), '
               'from American Community Survey 2020-2024 five-year public-use microdata',
     'explorer': EXPLORER, 'fetched': date.today().isoformat(),
     'city': None, 'boro': {}, 'puma': {},
