@@ -2560,7 +2560,8 @@ function fictionalBlock(lat, lng){
   // one row per character and work: a home and its filming location can both be near
   const dedupe = list => { const seen = new Set(); return list.filter(x => { const k = x.who + '|' + x.work; if (seen.has(k)) return false; seen.add(k); return true; }); };
   const near = dedupe(all.filter(x => !loose(x.prec) && x.d <= 500).sort((a,b) => a.d - b.d));
-  const area = dedupe(all.filter(x => loose(x.prec) && x.d <= x.radius).sort((a,b) => a.radius - b.radius || a.d - b.d));
+  const listed = new Set(near.map(x => x.who + '|' + x.work));
+  const area = dedupe(all.filter(x => loose(x.prec) && x.d <= x.radius && !listed.has(x.who + '|' + x.work)).sort((a,b) => a.radius - b.radius || a.d - b.d));
   const credit = x => `${esc(x.work)} (${[FICTION_MEDIUM[x.medium], x.creator, x.year].filter(Boolean).map(esc).join(', ')})`;
   const link = x => `<a href="${FICTION_URL}#${esc(x.id)}" target="_blank" rel="noopener">${esc(x.who)}</a>`;
   let h = `<div${areaAttr('c:500', 'Fictional homes: within 500 meters')}><div class="subhead">Fictional New Yorkers who lived nearby</div>`;
