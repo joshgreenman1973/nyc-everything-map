@@ -459,8 +459,6 @@ def nta_indicators():
     print('NTA indicators added:', sum(vc.values()), 'violent crimes,', sum(ev.values()), 'evictions,',
           sum(nb.values()), 'new building jobs,', len(pm), 'NTAs with PM2.5')
 
-if __name__ == '__main__':
-    schools(); school_quality(); infohub_schools(); landmarks(); airquality(); hvi(); density_fields(); nta_indicators(); cityoutline(); busstops(); elections(); neighborhoods_project(); hospitals(); lightcrime()
 
 # NOTE: the two June 2026 one-off merges became functions in Oct. 2026: pres24()
 # (called at the end of elections()) and nta_indicators() (called after
@@ -536,3 +534,32 @@ def infohub_schools(cfg=INFOHUB, check=False):
     print(f"schools: {sum(1 for s in schools if s[4])} with {cfg['enroll_year']} enrollment, "
           f"{sum(1 for s in schools if s[6] is not None)} ELA, {sum(1 for s in schools if s[7] is not None)} math "
           f"({cfg['test_year']}), {sum(1 for s in schools if s[8] is not None)} grad rates (cohort {cfg['grad_cohort']})")
+
+
+# ---------------------------------------------------------------------------
+# Six of the city's modified ZIP code areas (MODZCTA, pri4-ifjk) fold two ZIPs
+# into one outline ("10019, 10020"). For the ZIPs among them that the Census Bureau
+# maps on their own, bake the 2020 ZCTA shape so the page can draw that ZIP alone.
+# 10118 (the Empire State Building) and 11243 (a Brooklyn building ZIP) have no
+# ZCTA; the page draws the combined outline for them and says so.
+def zcta_split():
+    import urllib.request, urllib.parse
+    combos = json.load(urllib.request.urlopen(
+        "https://data.cityofnewyork.us/resource/pri4-ifjk.json?$select=label&$where=" +
+        urllib.parse.quote("label like '%,%'")))
+    zips = sorted({z.strip() for c in combos for z in c['label'].split(',')})
+    out = {}
+    for z in zips:
+        q = urllib.parse.urlencode({'where': f"ZCTA5='{z}'", 'outFields': 'ZCTA5', 'outSR': 4326,
+                                    'maxAllowableOffset': 0.00002, 'geometryPrecision': 6, 'f': 'geojson'})
+        fc = json.load(urllib.request.urlopen(
+            'https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/PUMA_TAD_TAZ_UGA_ZCTA/MapServer/1/query?' + q))
+        if fc.get('features'):
+            out[z] = fc['features'][0]['geometry']
+    json.dump({'combined': {z.strip(): c['label'] for c in combos for z in c['label'].split(',')},
+               'shapes': out}, open(f'{OUT}/zcta_split.json', 'w'), separators=(',', ':'))
+    print(f'zcta_split: {len(out)} of {len(zips)} ZIPs in combined outlines have their own census shape')
+
+
+if __name__ == '__main__':
+    schools(); school_quality(); infohub_schools(); landmarks(); airquality(); hvi(); density_fields(); nta_indicators(); cityoutline(); busstops(); elections(); neighborhoods_project(); hospitals(); lightcrime(); zcta_split()

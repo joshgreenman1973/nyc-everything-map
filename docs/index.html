@@ -369,7 +369,25 @@ ul.toplist .sub{display:block; font-size:11.5px; color:#8a8f9e; font-weight:400}
 /* ============================== setup ============================== */
 const NYC_BOUNDS = [[40.49,-74.27],[40.92,-73.68]];
 const map = L.map('map', {zoomControl:false, attributionControl:true, zoomSnap:0.25});
-map.fitBounds(NYC_BOUNDS, {padding:[6,6]});
+// A page opened in a hidden or zero-size frame has no map size yet, and fitBounds would
+// zoom all the way in. Start at a city-wide view and fit properly once the map has a size.
+function fitCity(){
+  const sz = map.getSize();
+  if (sz.x > 0 && sz.y > 0) map.fitBounds(NYC_BOUNDS, {padding:[6,6]});
+  else map.setView(L.latLngBounds(NYC_BOUNDS).getCenter(), 10);
+  return sz.x > 0 && sz.y > 0;
+}
+let cityFitted = fitCity();
+if (!cityFitted && window.ResizeObserver){
+  const ro = new ResizeObserver(() => {
+    map.invalidateSize();
+    if (map.getSize().x > 0 && map.getSize().y > 0){
+      ro.disconnect();
+      if (!cityFitted && typeof current !== 'undefined' && !current) cityFitted = fitCity();
+    }
+  });
+  ro.observe(document.getElementById('map'));
+}
 L.control.zoom({position:'bottomright'}).addTo(map);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=cb1_2r82_1_ae4e70b6166057bc41b89638', {
   attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
@@ -398,14 +416,14 @@ const LAYERS = {}, DATA = {};
 const CORE_LAYERS = ['nta','cd','council','precinct','schooldist','eszones','mszones','dsny','congress','assembly','senate','hurricane','historic'];
 const LATE_LAYERS = ['elections','tracts','hoods_alt','hoods_whong','puma'];
 const CORE_DATA = ['cityextent','officials','nta_demographics','compare_geos','subway','schools','airquality','hvi','hospitals','colleges','libraries','supermarkets','askingrents','parks'];
-const LATE_DATA = ['restaurants','commonplace','busstops','play','artsvenues','publicart','worship','rankings','tract_context','landmarks','neighborhoods_project','transit45','languages'];
+const LATE_DATA = ['restaurants','commonplace','busstops','play','artsvenues','publicart','worship','rankings','tract_context','landmarks','neighborhoods_project','transit45','languages','fictional'];
 let loaded = 0, totalFiles = CORE_LAYERS.length + LATE_LAYERS.length + CORE_DATA.length + LATE_DATA.length;
 function tick(){
   loaded++;
   $('loadmsg').textContent = `Loading city data… ${loaded}/${totalFiles}`;
   if (loaded >= totalFiles) $('loadchip').classList.add('done');
 }
-const DATA_VERSION = '34'; // bump when files in data/ change, so cached copies refresh
+const DATA_VERSION = '35'; // bump when files in data/ change, so cached copies refresh
 const FILE_P = {};   // file name -> promise that resolves once it is parsed into LAYERS or DATA
 function loadFile(f, isLayer, init, tries=2){
   return fetch(`data/${f}${isLayer ? '.topo' : ''}.json?v=${DATA_VERSION}`, init)
@@ -665,9 +683,23 @@ function pinPoi(li){
 let areaLayer = null, areaKey = null, areasOff = false, areaSeq = 0;
 const AREA_STYLE = {color:'#b3382c', weight:2, dashArray:'6 5', fillColor:'#b3382c', fillOpacity:.05, interactive:false};
 const _zipShape = {};
+// Six of the city's ZIP areas fold two ZIPs into one outline ("10019, 10020"). For those,
+// draw the Census Bureau's own shape for the ZIP (zcta_split.json); the two single-building
+// ZIPs with no census shape (10118, 11243) get the combined outline, and the caption says so.
+let _zctaSplit = null;
+const zctaSplit = () => _zctaSplit ||= fetch(`data/zcta_split.json?v=${DATA_VERSION}`).then(r => r.ok ? r.json() : null).catch(() => null);
 function zipShape(zip){
-  if (!_zipShape[zip]) _zipShape[zip] = soda('pri4-ifjk', {'$select':'the_geom,label', '$where':`label like '%${zip.replace(/\D/g,'')}%'`})
-    .then(r => r[0]?.the_geom ? {type:'Feature', properties:{}, geometry:r[0].the_geom} : null).catch(() => null);
+  zip = String(zip).replace(/\D/g,'');
+  if (!_zipShape[zip]) _zipShape[zip] = zctaSplit().then(sp => {
+    if (sp?.shapes?.[zip]) return {f:{type:'Feature', properties:{}, geometry:sp.shapes[zip]}, note:''};
+    return soda('pri4-ifjk', {'$select':'the_geom,label', '$where':`label like '%${zip}%'`})
+      .then(r => {
+        const hit = r.find(x => x.label.split(',').map(z => z.trim()).includes(zip)) || r[0];
+        if (!hit?.the_geom) return null;
+        const others = hit.label.split(',').map(z => z.trim()).filter(z => z !== zip);
+        return {f:{type:'Feature', properties:{}, geometry:hit.the_geom}, note: others.length ? ` · drawn together with ZIP ${others.join(' and ')}, which the census folds it into` : ''};
+      });
+  }).catch(() => null);
   return _zipShape[zip];
 }
 function clearArea(){
@@ -693,9 +725,10 @@ async function showArea(spec, label){
     const f = layerFeat(a);
     if (f?.geometry) lyr = L.geoJSON(f, {style:AREA_STYLE, interactive:false});
   } else if (kind === 'zip' && activeCtx?.zip){
-    const f = await zipShape(activeCtx.zip);
-    if (my !== areaSeq || !f) return;
-    lyr = L.geoJSON(f, {style:AREA_STYLE, interactive:false});
+    const z = await zipShape(activeCtx.zip);
+    if (my !== areaSeq || !z) return;
+    lyr = L.geoJSON(z.f, {style:AREA_STYLE, interactive:false});
+    label += z.note;
   }
   if (!lyr || my !== areaSeq) return;
   areaLayer = lyr.addTo(map);
@@ -925,13 +958,18 @@ function cdRow(cdCode){
   return row('Community district', `${esc(boroName)} CD ${n}<span class="meta">Community Board ${n}${info?' · '+esc(info.name):''}</span>`, 'cd');
 }
 const BORO_NAMES = {1:'Manhattan', 2:'Bronx', 3:'Brooklyn', 4:'Queens', 5:'Staten Island'};
-async function inspect(lat, lng, geoFeature=null){
+async function inspect(lat, lng, geoFeature=null, fromHistory=false){
   await coreReady;
   if (!inCity(lat, lng)){ alert('That point is outside New York City. The map covers the five boroughs, including their waters.'); return; }
+  const prev = current;
   current = {lat,lng};
   _feat = {};
   unpinShape(); unpinPoi(); clearArea();
-  history.replaceState(null,'',`#${lat.toFixed(5)},${lng.toFixed(5)}`);
+  // each new point is a history entry, so Back returns to the previous report;
+  // a point reached through Back or Forward (or the first load) just updates the entry
+  const hash = `#${lat.toFixed(5)},${lng.toFixed(5)}`;
+  if (fromHistory || !prev || location.hash === hash) history.replaceState(null,'',hash);
+  else history.pushState(null,'',hash);
   $('hero').classList.add('hidden');
   $('topsearch').style.display='block';
   dropPin(lat,lng);
@@ -2401,7 +2439,7 @@ async function fetchChanging(ctx){
     }).catch(()=>{ if(!stale(ctx)&&$('building')) $('building').innerHTML='<span class="errnote">Buildings feed unavailable right now.</span>'; });
   } else $('building').innerHTML = '';
   // newly licensed businesses (bbox ≈ 400 m)
-  const dy = 0.0036, dx = 0.0047, LIC_LIMIT = 40;
+  const dy = 0.0036, dx = 0.0047, LIC_LIMIT = 1000;
   Promise.all([
     soda('w7w3-xahh',{'$select':'business_name,dba_trade_name,business_category,license_creation_date',
       '$where':`latitude::number between ${lat-dy} and ${lat+dy} AND longitude::number between ${lng-dx} and ${lng+dx} AND license_creation_date >= '${daysAgoISO(365)}' AND license_status='Active'`,
@@ -2429,14 +2467,14 @@ async function fetchChanging(ctx){
     Promise.all([
       soda('tg4x-b46p',{'$select':'category,subcategoryname,startdatetime,parkingheld',
         '$where':`zipcode_s LIKE '%${zip}%' AND startdatetime >= '${daysAgoISO(180)}' AND eventtype='Shooting Permit'`,
-        '$order':'startdatetime DESC','$limit':5}),
+        '$order':'startdatetime DESC','$limit':1000}),
       feedMax('tg4x-b46p','enteredon'),  // when a permit was filed, not its (often future) shoot date — a true "data through" signal
     ]).then(([rows, mx]) => {
       if (stale(ctx)||!$('film')) return;
       const lag = feedLagNote(mx);
       if (!rows.length){ $('film').innerHTML = row('Film and TV shoots in this ZIP', lag ? `None in the city's file<span class="meta">${esc(lag.trim())}</span>` : 'None permitted in the last six months'); return; }
-      let h = `<div class="row"><span class="k">Film and TV shoots permitted in ZIP ${esc(zip)}, last six months</span><span class="v bignum">${rows.length}${rows.length===5?'+':''}</span></div>
-        <ul class="toplist">`+rows.map(x=>{
+      let h = `<div class="row"><span class="k">Film and TV shoots permitted in ZIP ${esc(zip)}, last six months</span><span class="v bignum">${fmt(rows.length)}</span></div>
+        <ul class="toplist">`+rows.slice(0,5).map(x=>{
           const street = (x.parkingheld||'').split(',')[0].toLowerCase().replace(/\s+/g,' ').trim();
           const cat = unshout(x.category || 'Production');
           const sub = x.subcategoryname && x.subcategoryname !== 'Not Applicable' && x.subcategoryname.toLowerCase() !== cat.toLowerCase() ? ' · ' + x.subcategoryname : '';
@@ -2470,7 +2508,7 @@ function feedLagNote(iso, maxDays){
 async function fetchLore(ctx){
   const el = $('body-lore'); if (!el) return;
   const {lat,lng} = ctx;
-  await Promise.all([FILE_P.landmarks, FILE_P.neighborhoods_project]).catch(()=>{});
+  await Promise.all([FILE_P.landmarks, FILE_P.neighborhoods_project, FILE_P.fictional]).catch(()=>{});
   if (stale(ctx) || !$('body-lore') || !DATA.landmarks) return;
   // nearest landmarks (static)
   const near = DATA.landmarks.map(l => ({name:l[0],lat:l[1],lng:l[2],year:l[3],url:l[4],arch:l[5]||'',d:haversine(lat,lng,l[1],l[2])}))
@@ -2481,10 +2519,12 @@ async function fetchLore(ctx){
       <span>${l.url?`<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.name)}</a>`:esc(l.name)}<span class="sub">designated ${esc(l.year)||'—'}${l.arch?' · '+esc(l.arch):''}</span></span>
       <span class="n">${walkmin(l.d)} min</span></li>`).join('')+`</ul>`;
   } else h += `<div class="note" style="margin:0 0 6px">No designated individual landmark within about a 30 minute walk.</div>`;
+  h += fictionalBlock(lat, lng);
   h += `<div${areaAttr('c:800', 'Wikipedia articles: within 800 meters')}><div class="subhead">Nearby on Wikipedia</div><div id="wiki"><span class="spin"></span></div></div>`;
   const np = neighborhoodsProjectLink(ctx.nta);
   h += morelinks([
     np && [np.url, `${np.name} in The Neighborhoods (Rob Stephenson)`],
+    ['https://joshgreenman1973.github.io/nyc-fictional-homes/', 'Fictional New Yorkers at home: the full map'],
     ['https://joshgreenman1973.github.io/nyc-three-eras/', 'Three Eras: look up this address in 1940, the 1980s and today'],
     ['https://80s.nyc/', '1980s street view (80s.nyc)'],
     ['https://www.oldnyc.org/', 'Old photos by location (OldNYC)'],
@@ -2501,6 +2541,41 @@ async function fetchLore(ctx){
       <span><a href="https://en.wikipedia.org/wiki/${encodeURIComponent(w.title.replace(/ /g,'_'))}" target="_blank" rel="noopener">${esc(w.title)}</a></span>
       <span class="n">${w.dist<100?Math.round(w.dist)+' m':walkmin(w.dist)+' min'}</span></li>`).join('')+`</ul>`;
   }catch(e){ if(!stale(ctx)&&$('wiki')) $('wiki').innerHTML='<span class="errnote">Wikipedia unavailable right now.</span>'; }
+}
+
+/* Fictional New Yorkers at home (companion map): characters from books, plays, film,
+   TV and comics who lived near the point. Rows: [id, character, work, medium, creator,
+   year, lat, lon, radius_m, precision, kind]. Placed homes count within 500 meters;
+   homes known only to a neighborhood, or at an invented address, count when their
+   rough circle covers the point. */
+const FICTION_URL = 'https://joshgreenman1973.github.io/nyc-fictional-homes/';
+const FICTION_PREC = {address_in_work:'address given in the work', building_in_work:'building or corner named in the work',
+  creator_stated:'address given by its creator', screen_exterior:'building shown on screen', block_inferred:'street or block only',
+  neighborhood:'neighborhood only', invented:'invented address'};
+const FICTION_MEDIUM = {book:'book', theater:'play', film:'film', tv:'TV', comics:'comics'};
+function fictionalBlock(lat, lng){
+  if (!DATA.fictional) return '';
+  const all = DATA.fictional.map(r => ({id:r[0], who:r[1], work:r[2], medium:r[3], creator:r[4], year:r[5], lat:r[6], lng:r[7], radius:r[8], prec:r[9], d:haversine(lat,lng,r[6],r[7])}));
+  const loose = p => p === 'neighborhood' || p === 'invented';
+  // one row per character and work: a home and its filming location can both be near
+  const dedupe = list => { const seen = new Set(); return list.filter(x => { const k = x.who + '|' + x.work; if (seen.has(k)) return false; seen.add(k); return true; }); };
+  const near = dedupe(all.filter(x => !loose(x.prec) && x.d <= 500).sort((a,b) => a.d - b.d));
+  const area = dedupe(all.filter(x => loose(x.prec) && x.d <= x.radius).sort((a,b) => a.radius - b.radius || a.d - b.d));
+  const credit = x => `${esc(x.work)} (${[FICTION_MEDIUM[x.medium], x.creator, x.year].filter(Boolean).map(esc).join(', ')})`;
+  const link = x => `<a href="${FICTION_URL}#${esc(x.id)}" target="_blank" rel="noopener">${esc(x.who)}</a>`;
+  let h = `<div${areaAttr('c:500', 'Fictional homes: within 500 meters')}><div class="subhead">Fictional New Yorkers who lived nearby</div>`;
+  if (near.length){
+    h += `<ul class="toplist">` + near.slice(0,6).map(x => `<li class="poi" data-lat="${x.lat}" data-lng="${x.lng}" data-name="${esc(x.who)}">
+      <span>${link(x)}<span class="sub">${credit(x)} · ${FICTION_PREC[x.prec]}</span></span>
+      <span class="n">${x.d < 100 ? Math.round(x.d) + ' m' : walkmin(x.d) + ' min'}</span></li>`).join('') + `</ul>`;
+    if (near.length > 6) h += `<div class="note" style="margin:0 0 6px">${plural(near.length - 6, 'more', 'more')} within 500 meters on the <a href="${FICTION_URL}" target="_blank" rel="noopener">full map</a>.</div>`;
+  } else h += `<div class="note" style="margin:0 0 6px">No fictional home with a placed address within 500 meters.</div>`;
+  if (area.length){
+    const shown = area.slice(0,4);
+    h += row(`Set around here, without an exact address`, `${fmt(area.length)}<span class="meta">${shown.map(x => `${link(x)}, ${esc(x.work)}${x.prec === 'invented' ? ' (invented address)' : ''}`).join(' · ')}${area.length > shown.length ? ` · and ${fmt(area.length - shown.length)} more` : ''}</span>`);
+  }
+  h += `<div class="note">From <a href="${FICTION_URL}" target="_blank" rel="noopener">Fictional New Yorkers at home</a>, a map of where characters in books, plays, film, TV and comics lived, each placed from a quoted source. A building shown on screen is the real building filmed as the home, and the story may put the home somewhere else. Homes known only to a neighborhood, or at an address that does not exist, are counted when their rough circle covers this point.</div></div>`;
+  return h;
 }
 
 /* The Neighborhoods project (Rob Stephenson) — link when the neighborhood is covered */
@@ -2758,10 +2833,20 @@ $('aicaution').addEventListener('click', () => $('aipop').classList.toggle('show
 document.addEventListener('click', e => {
   if (!$('aipop').contains(e.target) && e.target !== $('aicaution')) $('aipop').classList.remove('show');
 });
-if (location.hash){
+function hashPoint(){
   const m = location.hash.slice(1).split(',').map(Number);
-  if (m.length===2 && isFinite(m[0]) && isFinite(m[1])) coreReady.then(()=>inspect(m[0], m[1]));
+  return m.length===2 && isFinite(m[0]) && isFinite(m[1]) ? m : null;
 }
+if (hashPoint()){ const m = hashPoint(); coreReady.then(()=>inspect(m[0], m[1])); }
+// Back, Forward, or a saved link pasted into this tab: load that point's report
+function onHashNav(){
+  const m = hashPoint();
+  if (!m) return;
+  if (current && Math.abs(current.lat - m[0]) < 6e-6 && Math.abs(current.lng - m[1]) < 6e-6) return;
+  coreReady.then(() => inspect(m[0], m[1], null, true));
+}
+window.addEventListener('popstate', onHashNav);
+window.addEventListener('hashchange', onHashNav);
 </script>
 </body>
 </html>

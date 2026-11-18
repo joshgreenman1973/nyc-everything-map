@@ -25,6 +25,7 @@ The site is one static page, [`docs/index.html`](docs/index.html), on GitHub Pag
   - `extract_officials.py` builds `officials.json`. Citywide and borough officials are entered by hand in this file.
   - `extract_demographics.py` builds the old American Community Survey (ACS) 2016-2020 base; `refresh_acs2024.py` then rebuilds every neighborhood figure on ACS 2020-2024.
   - `bake_extras.py` bakes the point files and extras: schools and school quality (`infohub_schools()` lays the Department of Education's InfoHub spreadsheets, which run years ahead of the Open Data copies, over the Open Data base; download them into `data/raw/infohub/` first), landmarks, air quality, heat vulnerability, bus stops, election results (`elections()`, which ends by merging the 2024 presidential results in `pres24()`), the "Two factors" indicators (`nta_indicators()`), hospitals, The Neighborhoods links.
+  - `bake_fictional.py` bakes `fictional.json` from the published file of the companion Fictional New Yorkers at home map. Rerun it after that map is rebuilt.
   - `bake_rankings.py` copies neighborhood ranks from the sibling `nyc-nta-rankings` project (a local clone next to this one).
   - `refresh_askingrents.py` rebakes StreetEasy median asking rents.
   - `build_restaurants.py` / `refresh_restaurants.py` and `build_commonplace.py` rebuild the restaurant and named-place files.
@@ -51,6 +52,8 @@ Things that bite:
 - New-building counts use DOB NOW initial filings only (job numbers ending `-I1`). Every job also has a row per amendment and work type, so counting rows overstates construction about eightfold. The live panel and the baked indicator both follow this rule.
 - The Board of Elections CSV writes tallies over 999 with a comma ("1,020"). `pres24()` handles it; any other parse of that file has to as well.
 - Some city feeds stall for months (business licenses, film permits, crashes), and the crime complaint file is quarterly. The page checks each feed's newest record and says when it lags; nothing to fix on this end.
+- City Planning republishes the boundary files with a new version number that often leaves the shapes alone (the Nov. 2, 2026, release matched the June files). Download into a scratch folder, simplify, and compare district by district before replacing anything.
+- `bake_extras.py zcta_split()` bakes the census shapes for ZIPs the city's ZIP areas combine (for example 10019 and 10020). Rerun it if the city's combined list changes.
 - Hospital emergency-room status is a hand-checked list in `bake_extras.py hospitals()`. Emergency departments open and close.
 - The languages block (`bake_languages.py`) reads City Planning's NYC Language Explorer layers on ArcGIS Online. City Planning names them by release (`PUMAData_Language_Mar2026`), so a new edition will likely live at a new URL: find it in the Explorer's app config (`arcgis.com/sharing/rest/content/items/0da08a1596574ec78cbaa5bef6a04b3e/data?f=json`) and update the constants. The long table's district numbers have errors; the script joins on names.
 
